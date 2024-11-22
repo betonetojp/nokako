@@ -12,6 +12,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "text", "text", "{13BE84CD-88A4-473D-BFF6-8F4CB34D0A0F}"
 	ProjectSection(SolutionItems) = preProject
 		LICENSE = LICENSE
+		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NNostr.Client", "NNostr.Client\NNostr.Client.csproj", "{1C4CEBB1-3953-473A-8D77-08D3C54A3AFC}"
