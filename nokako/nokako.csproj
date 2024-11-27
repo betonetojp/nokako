@@ -33,6 +33,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CredentialManagement" Version="1.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\NNostr.Client\NNostr.Client.csproj" />
     <ProjectReference Include="..\nokakoiCrypt\nokakoiCrypt.csproj" />
   </ItemGroup>

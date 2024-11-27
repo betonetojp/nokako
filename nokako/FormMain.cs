@@ -2,6 +2,7 @@
 using NNostr.Client.Protocols;
 using nokako.Properties;
 using nokakoiCrypt;
+using System.Configuration;
 using System.Diagnostics;
 
 namespace nokako
@@ -16,7 +17,7 @@ namespace nokako
         private FormRelayList _formRelayList = new();
 
         private string _nsec = string.Empty;
-        private string _npubHex = string.Empty;
+        private string? _npubHex = string.Empty;
 
         /// <summary>
         /// フォロイー公開鍵のハッシュセット
@@ -848,6 +849,7 @@ namespace nokako
             _nokakoiKey = _formSetting.textBoxNokakoiKey.Text;
             _password = _formSetting.textBoxPassword.Text;
             _addClient = _formSetting.checkBoxAddClient.Checked;
+
             try
             {
                 // 別アカウントログイン失敗に備えてクリアしておく
@@ -889,6 +891,9 @@ namespace nokako
                     // ログインユーザー表示名取得
                     var name = GetUserName(_npubHex);
                     //_formPostBar.textBoxPost.PlaceholderText = $"Post as {name}";
+
+                    SavePubkey(_npubHex);
+                    SaveUserPassword(_npubHex, _password);
                 }
             }
             catch (Exception ex)
@@ -1026,7 +1031,11 @@ namespace nokako
         #region ロード時
         // ロード時
         private void FormMain_Load(object sender, EventArgs e)
+
         {
+            _npubHex = LoadPubkey();
+            _password = GetUserPassword(_npubHex);
+
             ButtonStart_Click(sender, e);
         }
         #endregion
@@ -1215,5 +1224,71 @@ namespace nokako
             dataGridViewNotes.Focus();
         }
         #endregion
+
+        private static void SavePubkey(string pubkey)
+        {
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            config.AppSettings.Settings.Remove("pubkey");
+            config.AppSettings.Settings.Add("pubkey", pubkey);
+            config.Save(ConfigurationSaveMode.Modified);
+            ConfigurationManager.RefreshSection("appSettings");
+        }
+
+        private static string? LoadPubkey()
+        {
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            return config.AppSettings.Settings["pubkey"]?.Value;
+        }
+
+        private static void SaveUserPassword(string pubkey, string password)
+        {
+            // 前回のトークンを削除
+            DeletePreviousTarget(pubkey);
+
+            // 新しいtargetを生成して保存
+            string target = Guid.NewGuid().ToString();
+            Tools.SavePassword(target, pubkey, password);
+            SaveTargetForUser(pubkey, target);
+        }
+
+        private static void SaveTargetForUser(string pubkey, string target)
+        {
+            // targetをnokako.configに保存
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            config.AppSettings.Settings.Remove(pubkey + "_target");
+            config.AppSettings.Settings.Add(pubkey + "_target", target);
+            config.Save(ConfigurationSaveMode.Modified);
+            ConfigurationManager.RefreshSection("appSettings");
+        }
+
+        private static void DeletePreviousTarget(string pubkey)
+        {
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            var previousTarget = config.AppSettings.Settings[pubkey + "_target"]?.Value;
+            if (!string.IsNullOrEmpty(previousTarget))
+            {
+                Tools.DeletePassword(previousTarget);
+                config.AppSettings.Settings.Remove(pubkey + "_target");
+                config.Save(ConfigurationSaveMode.Modified);
+                ConfigurationManager.RefreshSection("appSettings");
+            }
+        }
+
+        private static string GetUserPassword(string? pubkey)
+        {
+            string? target = GetTargetForUser(pubkey);
+            if (target != null)
+            {
+                return Tools.GetPassword(target);
+            }
+            return string.Empty;
+        }
+
+        private static string? GetTargetForUser(string? pubkey)
+        {
+            // nokako.configからtargetを取得
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            return config.AppSettings.Settings[pubkey + "_target"]?.Value;
+        }
     }
 }
