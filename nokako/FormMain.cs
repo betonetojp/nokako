@@ -1033,10 +1033,19 @@ namespace nokako
         private void FormMain_Load(object sender, EventArgs e)
 
         {
-            _npubHex = LoadPubkey();
-            _password = GetUserPassword(_npubHex);
+            try
+            {
+                _npubHex = LoadPubkey();
+                _password = GetUserPassword(_npubHex);
+                _nsec = NokakoiCrypt.DecryptNokakoiKey(_nokakoiKey, _password);
 
-            ButtonStart_Click(sender, e);
+                ButtonStart_Click(sender, e);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                labelRelays.Text = "Decryption failed.";
+            }
         }
         #endregion
 
