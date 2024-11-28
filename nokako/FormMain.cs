@@ -1031,7 +1031,6 @@ namespace nokako
         #region ロード時
         // ロード時
         private void FormMain_Load(object sender, EventArgs e)
-
         {
             try
             {
@@ -1234,6 +1233,7 @@ namespace nokako
         }
         #endregion
 
+        #region パスワード管理
         private static void SavePubkey(string pubkey)
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
@@ -1262,7 +1262,6 @@ namespace nokako
 
         private static void SaveTargetForUser(string pubkey, string target)
         {
-            // targetをnokako.configに保存
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             config.AppSettings.Settings.Remove(pubkey + "_target");
             config.AppSettings.Settings.Add(pubkey + "_target", target);
@@ -1295,9 +1294,9 @@ namespace nokako
 
         private static string? GetTargetForUser(string? pubkey)
         {
-            // nokako.configからtargetを取得
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             return config.AppSettings.Settings[pubkey + "_target"]?.Value;
         }
+        #endregion
     }
 }
