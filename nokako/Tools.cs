@@ -375,7 +375,7 @@ namespace nokako
         }
         #endregion
 
-        #region パスワード管理
+        #region Windows資格情報管理
         public static void SavePassword(string target, string username, string password)
         {
             using var cred = new Credential();
