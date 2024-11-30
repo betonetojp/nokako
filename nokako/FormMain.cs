@@ -50,6 +50,8 @@ namespace nokako
         private static readonly TimeSpan NotifyInterval = TimeSpan.FromSeconds(60);
         // 投稿機能有効フラグ
         private bool _enablePost = true;
+
+        private System.Threading.Timer? _dailyTimer;
         #endregion
 
         #region コンストラクタ
@@ -103,6 +105,9 @@ namespace nokako
             dataGridViewNotes.DefaultCellStyle.SelectionBackColor = Tools.HexToColor(Setting.GridColor);
 
             _formManiacs.MainForm = this;
+
+            // タイマーの初期化
+            SetDailyTimer();
         }
         #endregion
 
@@ -131,7 +136,7 @@ namespace nokako
                             toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
                             break;
                         default:
-                            labelRelays.Text = $"{NostrAccess.Relays.Length} relays";
+                            labelRelays.Text = $"{connectCount} relays";
                             toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
                             break;
                     }
@@ -1024,6 +1029,9 @@ namespace nokako
             Setting.Save(_configPath);
             Tools.SaveUsers(Users);
 
+            _dailyTimer?.Change(Timeout.Infinite, 0);
+            _dailyTimer?.Dispose();
+
             Application.Exit();
         }
         #endregion
@@ -1031,7 +1039,6 @@ namespace nokako
         #region ロード時
         // ロード時
         private void FormMain_Load(object sender, EventArgs e)
-
         {
             try
             {
@@ -1234,6 +1241,7 @@ namespace nokako
         }
         #endregion
 
+        #region パスワード管理
         private static void SavePubkey(string pubkey)
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
@@ -1262,7 +1270,6 @@ namespace nokako
 
         private static void SaveTargetForUser(string pubkey, string target)
         {
-            // targetをnokako.configに保存
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             config.AppSettings.Settings.Remove(pubkey + "_target");
             config.AppSettings.Settings.Add(pubkey + "_target", target);
@@ -1295,9 +1302,80 @@ namespace nokako
 
         private static string? GetTargetForUser(string? pubkey)
         {
-            // nokako.configからtargetを取得
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             return config.AppSettings.Settings[pubkey + "_target"]?.Value;
         }
+        #endregion
+
+        #region デイリータイマー
+        private void SetDailyTimer()
+        {
+            var now = DateTime.Now;
+            var targetTime = new DateTime(now.Year, now.Month, now.Day, 11, 55, 0);
+
+            if (now > targetTime)
+            {
+                targetTime = targetTime.AddDays(1);
+            }
+
+            TimeSpan timeToGo = targetTime - now;
+            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, TimeSpan.FromDays(1));
+        }
+
+        private async void DailyTimerCallback(object? state)
+        {
+            if (NostrAccess.Clients == null)
+            {
+                return;
+            }
+
+            try
+            {
+                labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnecting..."));
+
+                await NostrAccess.Clients.Disconnect();
+                await NostrAccess.ConnectAsync();
+                await NostrAccess.SubscribeAsync();
+
+                // ログイン済みの時
+                if (!string.IsNullOrEmpty(_npubHex))
+                {
+                    // フォロイーを購読をする
+                    await NostrAccess.SubscribeFollowsAsync(_npubHex);
+                }
+
+                labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnected successfully."));
+
+                await PostAsync("そろそろお昼ですよ");
+
+                // 投稿後にlabelRelays.TextとtoolTipRelaysを元に戻す
+                labelRelays.Invoke((MethodInvoker)(() =>
+                {
+                    int relayCount = NostrAccess.Relays.Length;
+                    if (relayCount == 0)
+                    {
+                        labelRelays.Text = "No relay enabled.";
+                        toolTipRelays.SetToolTip(labelRelays, string.Empty);
+                    }
+                    else if (relayCount == 1)
+                    {
+                        labelRelays.Text = NostrAccess.Relays[0].ToString();
+                        toolTipRelays.SetToolTip(labelRelays, NostrAccess.Relays[0].ToString());
+                    }
+                    else
+                    {
+                        labelRelays.Text = $"{relayCount} relays";
+                        toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex.Message);
+                labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnection failed."));
+                MessageBox.Show($"再接続に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        #endregion
     }
 }
