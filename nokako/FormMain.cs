@@ -1045,6 +1045,8 @@ namespace nokako
                 _npubHex = LoadPubkey();
                 _password = GetUserPassword(_npubHex);
                 _nsec = NokakoiCrypt.DecryptNokakoiKey(_nokakoiKey, _password);
+                _formSetting.textBoxNokakoiKey.Text = _nokakoiKey;
+                _formSetting.textBoxPassword.Text = _password;
 
                 ButtonStart_Click(sender, e);
             }
