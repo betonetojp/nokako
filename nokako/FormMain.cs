@@ -54,6 +54,7 @@ namespace nokako
 
         private System.Threading.Timer? _dailyTimer;
         private bool _reallyClose = false;
+        private static Mutex? _mutex;
         #endregion
 
         #region コンストラクタ
@@ -61,6 +62,21 @@ namespace nokako
         public FormMain()
         {
             InitializeComponent();
+
+            // アプリケーションの実行パスを取得
+            string exePath = Application.ExecutablePath;
+            string mutexName = $"nokakoMutex_{exePath.Replace("\\", "_")}";
+
+            // 二重起動を防ぐためのミューテックスを作成
+            bool createdNew;
+            _mutex = new Mutex(true, mutexName, out createdNew);
+
+            if (!createdNew)
+            {
+                // 既に起動している場合はメッセージを表示して終了
+                MessageBox.Show("Already running.", "nokako", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Environment.Exit(0);
+            }
 
             // ボタンの画像をDPIに合わせて表示
             float scale = CreateGraphics().DpiX / 96f;
