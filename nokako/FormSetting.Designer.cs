@@ -42,6 +42,7 @@
             checkBoxShowOnlyFollowees = new CheckBox();
             label3 = new Label();
             linkLabelVersion = new LinkLabel();
+            checkBoxMinimizeToTray = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)trackBarOpacity).BeginInit();
             SuspendLayout();
             // 
@@ -184,11 +185,22 @@
             linkLabelVersion.Text = "v0.1.0";
             linkLabelVersion.LinkClicked += LinkLabelVersion_LinkClicked;
             // 
+            // checkBoxMinimizeToTray
+            // 
+            checkBoxMinimizeToTray.AutoSize = true;
+            checkBoxMinimizeToTray.Location = new Point(12, 140);
+            checkBoxMinimizeToTray.Name = "checkBoxMinimizeToTray";
+            checkBoxMinimizeToTray.Size = new Size(150, 19);
+            checkBoxMinimizeToTray.TabIndex = 8;
+            checkBoxMinimizeToTray.Text = "Minimize to system tray";
+            checkBoxMinimizeToTray.UseVisualStyleBackColor = true;
+            // 
             // FormSetting
             // 
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(284, 261);
+            Controls.Add(checkBoxMinimizeToTray);
             Controls.Add(linkLabelVersion);
             Controls.Add(label3);
             Controls.Add(checkBoxShowOnlyFollowees);
@@ -236,5 +248,6 @@
         internal CheckBox checkBoxShowOnlyFollowees;
         private Label label3;
         private LinkLabel linkLabelVersion;
+        internal CheckBox checkBoxMinimizeToTray;
     }
 }

@@ -36,6 +36,7 @@ namespace nokako
         private string _nokakoiKey = string.Empty;
         private string _password = string.Empty;
         private bool _addClient;
+        private bool _minimizeToTray;
 
         private double _tempOpacity = 1.00;
 
@@ -52,6 +53,7 @@ namespace nokako
         private bool _enablePost = true;
 
         private System.Threading.Timer? _dailyTimer;
+        private bool _reallyClose = false;
         #endregion
 
         #region コンストラクタ
@@ -95,9 +97,10 @@ namespace nokako
                 Opacity = 1;
             }
             _tempOpacity = Opacity;
-            //dataGridViewNotes.Columns["avatar"].Visible = _showAvatar;
             _showOnlyFollowees = Setting.ShowOnlyFollowees;
             _nokakoiKey = Setting.NokakoiKey;
+            _minimizeToTray = Setting.MinimizeToTray;
+            notifyIcon.Visible = _minimizeToTray;
             _addClient = Setting.AddClient;
 
             dataGridViewNotes.Columns["name"].Width = Setting.NameColumnWidth;
@@ -840,6 +843,7 @@ namespace nokako
             _formSetting.checkBoxShowOnlyFollowees.Checked = _showOnlyFollowees;
             _formSetting.textBoxNokakoiKey.Text = _nokakoiKey;
             _formSetting.textBoxPassword.Text = _password;
+            _formSetting.checkBoxMinimizeToTray.Checked = _minimizeToTray;
             _formSetting.checkBoxAddClient.Checked = _addClient;
 
             // 開く
@@ -849,10 +853,11 @@ namespace nokako
             TopMost = _formSetting.checkBoxTopMost.Checked;
             Opacity = _formSetting.trackBarOpacity.Value / 100.0;
             _tempOpacity = Opacity;
-            //dataGridViewNotes.Columns["avatar"].Visible = _showAvatar;
             _showOnlyFollowees = _formSetting.checkBoxShowOnlyFollowees.Checked;
             _nokakoiKey = _formSetting.textBoxNokakoiKey.Text;
             _password = _formSetting.textBoxPassword.Text;
+            _minimizeToTray = _formSetting.checkBoxMinimizeToTray.Checked;
+            notifyIcon.Visible = _minimizeToTray;
             _addClient = _formSetting.checkBoxAddClient.Checked;
 
             try
@@ -911,6 +916,7 @@ namespace nokako
             Setting.Opacity = Opacity;
             Setting.ShowOnlyFollowees = _showOnlyFollowees;
             Setting.NokakoiKey = _nokakoiKey;
+            Setting.MinimizeToTray = _minimizeToTray;
             Setting.AddClient = _addClient;
 
             Setting.Save(_configPath);
@@ -1011,28 +1017,38 @@ namespace nokako
         // 閉じる
         private void FormMain_FormClosing(object sender, FormClosingEventArgs e)
         {
-            NostrAccess.CloseSubscriptions();
-            NostrAccess.DisconnectAndDispose();
-
-            if (FormWindowState.Normal != WindowState)
+            if (_minimizeToTray && !_reallyClose && e.CloseReason == CloseReason.UserClosing)
             {
-                // 最小化最大化状態の時、元の位置と大きさを保存
-                Setting.Location = RestoreBounds.Location;
-                Setting.Size = RestoreBounds.Size;
+                // 閉じるボタンが押されたときは最小化
+                e.Cancel = true;
+                WindowState = FormWindowState.Minimized;
+                Hide(); // フォームを非表示にします（タスクトレイに格納）
             }
             else
             {
-                Setting.Location = Location;
-                Setting.Size = Size;
+                NostrAccess.CloseSubscriptions();
+                NostrAccess.DisconnectAndDispose();
+
+                if (FormWindowState.Normal != WindowState)
+                {
+                    // 最小化最大化状態の時、元の位置と大きさを保存
+                    Setting.Location = RestoreBounds.Location;
+                    Setting.Size = RestoreBounds.Size;
+                }
+                else
+                {
+                    Setting.Location = Location;
+                    Setting.Size = Size;
+                }
+                Setting.NameColumnWidth = dataGridViewNotes.Columns["name"].Width;
+                Setting.Save(_configPath);
+                Tools.SaveUsers(Users);
+
+                _dailyTimer?.Change(Timeout.Infinite, 0);
+                _dailyTimer?.Dispose();
+
+                Application.Exit();
             }
-            Setting.NameColumnWidth = dataGridViewNotes.Columns["name"].Width;
-            Setting.Save(_configPath);
-            Tools.SaveUsers(Users);
-
-            _dailyTimer?.Change(Timeout.Infinite, 0);
-            _dailyTimer?.Dispose();
-
-            Application.Exit();
         }
         #endregion
 
@@ -1378,6 +1394,53 @@ namespace nokako
                 MessageBox.Show($"再接続に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
         #endregion
+
+        private void NotifyIcon_Click(object sender, EventArgs e)
+        {
+            // 右クリック時は抜ける
+            if (e is MouseEventArgs me && me.Button == MouseButtons.Right)
+            {
+                return;
+            }
+
+            if (WindowState == FormWindowState.Minimized)
+            {
+                Show();
+                WindowState = FormWindowState.Normal;
+            }
+            else if (WindowState == FormWindowState.Normal)
+            {
+                WindowState = FormWindowState.Minimized;
+            }
+        }
+
+        private void SettingToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // 設定画面がすでに開かれている場合は抜ける
+            if (_formSetting.Visible)
+            {
+                return;
+            }
+            Show();
+            WindowState = FormWindowState.Normal;
+            ButtonSetting_Click(sender, e);
+        }
+
+        private void QuitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            _reallyClose = true;
+            Close();
+        }
+
+        private void FormMain_SizeChanged(object sender, EventArgs e)
+        {
+            // 最小化時はタスクトレイに格納
+            if (_minimizeToTray && WindowState == FormWindowState.Minimized)
+            {
+                Hide();
+            }
+        }
     }
 }
