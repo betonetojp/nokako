@@ -1386,20 +1386,20 @@ namespace nokako
                 labelRelays.Invoke((MethodInvoker)(() =>
                 {
                     int relayCount = NostrAccess.Relays.Length;
-                    if (relayCount == 0)
+                    switch (relayCount)
                     {
-                        labelRelays.Text = "No relay enabled.";
-                        toolTipRelays.SetToolTip(labelRelays, string.Empty);
-                    }
-                    else if (relayCount == 1)
-                    {
-                        labelRelays.Text = NostrAccess.Relays[0].ToString();
-                        toolTipRelays.SetToolTip(labelRelays, NostrAccess.Relays[0].ToString());
-                    }
-                    else
-                    {
-                        labelRelays.Text = $"{relayCount} relays";
-                        toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
+                        case 0:
+                            labelRelays.Text = "No relay enabled.";
+                            toolTipRelays.SetToolTip(labelRelays, string.Empty);
+                            break;
+                        case 1:
+                            labelRelays.Text = NostrAccess.RelayStatusList[0];
+                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
+                            break;
+                        default:
+                            labelRelays.Text = $"{NostrAccess.Relays.Length} relays";
+                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
+                            break;
                     }
                 }));
             }
