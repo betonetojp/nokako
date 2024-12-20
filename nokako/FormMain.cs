@@ -144,26 +144,28 @@ namespace nokako
                 else
                 {
                     connectCount = await NostrAccess.ConnectAsync();
-                    switch (connectCount)
-                    {
-                        case 0:
-                            labelRelays.Text = "No relay enabled.";
-                            toolTipRelays.SetToolTip(labelRelays, string.Empty);
-                            break;
-                        case 1:
-                            labelRelays.Text = NostrAccess.RelayStatusList[0];
-                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
-                            break;
-                        default:
-                            labelRelays.Text = $"{NostrAccess.Relays.Length} relays";
-                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
-                            break;
-                    }
+                    
                     if (NostrAccess.Clients != null)
                     {
-                        NostrAccess.Clients.EventsReceived += OnClientOnEventsReceived2;
-                        NostrAccess.Clients.EventsReceived += OnClientOnEventsReceived;
+                        NostrAccess.Clients.EventsReceived += OnClientOnUsersInfoEventsReceived;
+                        NostrAccess.Clients.EventsReceived += OnClientOnTimeLineEventsReceived;
                     }
+                }
+
+                toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
+
+                switch (connectCount)
+                {
+                    case 0:
+                        labelRelays.Text = "No relay enabled.";
+                        buttonStart.Enabled = false;
+                        return;
+                    case 1:
+                        labelRelays.Text = $"{connectCount} relay";
+                        break;
+                    default:
+                        labelRelays.Text = $"{connectCount} relays";
+                        break;
                 }
 
                 await NostrAccess.SubscribeAsync();
@@ -197,7 +199,7 @@ namespace nokako
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="args"></param>
-        private void OnClientOnEventsReceived2(object? sender, (string subscriptionId, NostrEvent[] events) args)
+        private void OnClientOnUsersInfoEventsReceived(object? sender, (string subscriptionId, NostrEvent[] events) args)
         {
             if (args.subscriptionId == NostrAccess.GetFolloweesSubscriptionId)
             {
@@ -280,7 +282,7 @@ namespace nokako
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="args"></param>
-        private async void OnClientOnEventsReceived(object? sender, (string subscriptionId, NostrEvent[] events) args)
+        private async void OnClientOnTimeLineEventsReceived(object? sender, (string subscriptionId, NostrEvent[] events) args)
         {
             if (args.subscriptionId == NostrAccess.SubscriptionId)
             {
@@ -898,11 +900,11 @@ namespace nokako
                             toolTipRelays.SetToolTip(labelRelays, string.Empty);
                             break;
                         case 1:
-                            labelRelays.Text = NostrAccess.Relays[0].ToString();
+                            labelRelays.Text = $"{connectCount} relay";
                             toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
                             break;
                         default:
-                            labelRelays.Text = $"{NostrAccess.Relays.Length} relays";
+                            labelRelays.Text = $"{connectCount} relays";
                             toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
                             break;
                     }
