@@ -18,10 +18,10 @@ namespace nokako
             public Point Location { get; set; }
             public Size Size { get; set; } = new Size(400, 400);
             public int NameColumnWidth { get; set; } = 70;
+
             public bool TopMost { get; set; } = false;
             public double Opacity { get; set; } = 1.00;
             public bool ShowOnlyFollowees { get; set; } = false;
-            public string NokakoiKey { get; set; } = string.Empty;
             public bool MinimizeToTray { get; set; } = false;
             public bool AddClient { get; set; } = true;
             public string GridColor { get; set; } = "#FF1493";
@@ -47,6 +47,7 @@ namespace nokako
             get => _data.NameColumnWidth;
             set => _data.NameColumnWidth = value;
         }
+
         public static bool TopMost
         {
             get => _data.TopMost;
@@ -61,11 +62,6 @@ namespace nokako
         {
             get => _data.ShowOnlyFollowees;
             set => _data.ShowOnlyFollowees = value;
-        }
-        public static string NokakoiKey
-        {
-            get => _data.NokakoiKey;
-            set => _data.NokakoiKey = value;
         }
         public static bool MinimizeToTray
         {
@@ -83,6 +79,7 @@ namespace nokako
             get => _data.AddClient;
             set => _data.AddClient = value;
         }
+
         public static string GridColor
         {
             get => _data.GridColor;

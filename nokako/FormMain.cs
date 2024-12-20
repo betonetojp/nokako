@@ -1,7 +1,6 @@
 ﻿using NNostr.Client;
 using NNostr.Client.Protocols;
 using nokako.Properties;
-using nokakoiCrypt;
 using System.Configuration;
 using System.Diagnostics;
 
@@ -17,7 +16,7 @@ namespace nokako
         private FormRelayList _formRelayList = new();
 
         private string _nsec = string.Empty;
-        private string? _npubHex = string.Empty;
+        private string _npubHex = string.Empty;
 
         /// <summary>
         /// フォロイー公開鍵のハッシュセット
@@ -33,8 +32,6 @@ namespace nokako
         internal KeywordNotifier Notifier = new();
 
         private bool _showOnlyFollowees;
-        private string _nokakoiKey = string.Empty;
-        private string _password = string.Empty;
         private bool _addClient;
         private bool _minimizeToTray;
 
@@ -114,7 +111,6 @@ namespace nokako
             }
             _tempOpacity = Opacity;
             _showOnlyFollowees = Setting.ShowOnlyFollowees;
-            _nokakoiKey = Setting.NokakoiKey;
             _minimizeToTray = Setting.MinimizeToTray;
             notifyIcon.Visible = _minimizeToTray;
             _addClient = Setting.AddClient;
@@ -179,6 +175,14 @@ namespace nokako
                 {
                     // フォロイーを購読をする
                     await NostrAccess.SubscribeFollowsAsync(_npubHex);
+
+                    // ログインユーザー名取得
+                    var loginName = GetName(_npubHex);
+                    if (!string.IsNullOrEmpty(loginName))
+                    {
+                        Text = $"nokako - @{loginName}";
+                        notifyIcon.Text = $"nokako - @{loginName}";
+                    }
                 }
 
                 dataGridViewNotes.Rows.Clear();
@@ -859,10 +863,10 @@ namespace nokako
             _formSetting.checkBoxTopMost.Checked = TopMost;
             _formSetting.trackBarOpacity.Value = (int)(Opacity * 100);
             _formSetting.checkBoxShowOnlyFollowees.Checked = _showOnlyFollowees;
-            _formSetting.textBoxNokakoiKey.Text = _nokakoiKey;
-            _formSetting.textBoxPassword.Text = _password;
             _formSetting.checkBoxMinimizeToTray.Checked = _minimizeToTray;
             _formSetting.checkBoxAddClient.Checked = _addClient;
+            _formSetting.textBoxNsec.Text = _nsec;
+            _formSetting.textBoxNpub.Text = _nsec.GetNpub();
 
             // 開く
             _formSetting.ShowDialog(this);
@@ -872,56 +876,52 @@ namespace nokako
             Opacity = _formSetting.trackBarOpacity.Value / 100.0;
             _tempOpacity = Opacity;
             _showOnlyFollowees = _formSetting.checkBoxShowOnlyFollowees.Checked;
-            _nokakoiKey = _formSetting.textBoxNokakoiKey.Text;
-            _password = _formSetting.textBoxPassword.Text;
             _minimizeToTray = _formSetting.checkBoxMinimizeToTray.Checked;
             notifyIcon.Visible = _minimizeToTray;
             _addClient = _formSetting.checkBoxAddClient.Checked;
+            _nsec = _formSetting.textBoxNsec.Text;
 
             try
             {
                 // 別アカウントログイン失敗に備えてクリアしておく
-                _nsec = string.Empty;
                 _npubHex = string.Empty;
                 _followeesHexs.Clear();
+                Text = "nokako";
+                notifyIcon.Text = "nokako";
 
                 // 秘密鍵と公開鍵取得
-                _nsec = NokakoiCrypt.DecryptNokakoiKey(_nokakoiKey, _password);
                 _npubHex = _nsec.GetNpubHex();
 
                 // ログイン済みの時
                 if (!string.IsNullOrEmpty(_npubHex))
                 {
                     int connectCount = await NostrAccess.ConnectAsync();
+
+                    toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
+
                     switch (connectCount)
                     {
                         case 0:
                             labelRelays.Text = "No relay enabled.";
-                            toolTipRelays.SetToolTip(labelRelays, string.Empty);
-                            break;
+                            return;
                         case 1:
                             labelRelays.Text = $"{connectCount} relay";
-                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
                             break;
                         default:
                             labelRelays.Text = $"{connectCount} relays";
-                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.Relays.Select(r => r.ToString())));
                             break;
-                    }
-                    if (0 == connectCount)
-                    {
-                        return;
                     }
 
                     // フォロイーを購読をする
                     await NostrAccess.SubscribeFollowsAsync(_npubHex);
 
-                    // ログインユーザー表示名取得
-                    var name = GetUserName(_npubHex);
-                    //_formPostBar.textBoxPost.PlaceholderText = $"Post as {name}";
-
-                    SavePubkey(_npubHex);
-                    SaveUserPassword(_npubHex, _password);
+                    // ログインユーザー名取得
+                    var loginName = GetName(_npubHex);
+                    if (!string.IsNullOrEmpty(loginName))
+                    {
+                        Text = $"nokako - @{loginName}";
+                        notifyIcon.Text = $"nokako - @{loginName}";
+                    }
                 }
             }
             catch (Exception ex)
@@ -929,11 +929,13 @@ namespace nokako
                 Debug.WriteLine(ex.Message);
                 labelRelays.Text = "Decryption failed.";
             }
+            // nsecを保存
+            SavePubkey(_npubHex);
+            SaveNsec(_npubHex, _nsec);
 
             Setting.TopMost = TopMost;
             Setting.Opacity = Opacity;
             Setting.ShowOnlyFollowees = _showOnlyFollowees;
-            Setting.NokakoiKey = _nokakoiKey;
             Setting.MinimizeToTray = _minimizeToTray;
             Setting.AddClient = _addClient;
 
@@ -976,6 +978,28 @@ namespace nokako
         private void Control_MouseLeave(object sender, EventArgs e)
         {
             Opacity = _tempOpacity;
+        }
+        #endregion
+
+        #region ユーザー名を取得する
+        /// <summary>
+        /// ユーザー名を取得する
+        /// </summary>
+        /// <param name="publicKeyHex">公開鍵HEX</param>
+        /// <returns>ユーザー名</returns>
+        private string? GetName(string publicKeyHex)
+        {
+            // 情報があればユーザー名を取得
+            Users.TryGetValue(publicKeyHex, out User? user);
+            string? userName = string.Empty;
+            if (user != null)
+            {
+                userName = user.Name;
+                // 取得日更新
+                user.LastActivity = DateTime.Now;
+                Tools.SaveUsers(Users);
+            }
+            return userName;
         }
         #endregion
 
@@ -1077,10 +1101,13 @@ namespace nokako
             try
             {
                 _npubHex = LoadPubkey();
-                _password = GetUserPassword(_npubHex);
-                _nsec = NokakoiCrypt.DecryptNokakoiKey(_nokakoiKey, _password);
-                _formSetting.textBoxNokakoiKey.Text = _nokakoiKey;
-                _formSetting.textBoxPassword.Text = _password;
+                _nsec = LoadNsec();
+                _formSetting.textBoxNsec.Text = _nsec;
+                _formSetting.textBoxNpub.Text = _nsec.GetNpub();
+                if (!string.IsNullOrEmpty(_formSetting.textBoxNpub.Text))
+                {
+                    _formSetting.textBoxNsec.Enabled = false;
+                }
 
                 ButtonStart_Click(sender, e);
             }
@@ -1287,59 +1314,59 @@ namespace nokako
             ConfigurationManager.RefreshSection("appSettings");
         }
 
-        private static string? LoadPubkey()
+        private static string LoadPubkey()
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            return config.AppSettings.Settings["pubkey"]?.Value;
+            return config.AppSettings.Settings["pubkey"]?.Value ?? string.Empty;
         }
 
-        private static void SaveUserPassword(string pubkey, string password)
+        private static void SaveNsec(string pubkey, string nsec)
         {
             // 前回のトークンを削除
-            DeletePreviousTarget(pubkey);
+            DeletePreviousTarget();
 
             // 新しいtargetを生成して保存
             string target = Guid.NewGuid().ToString();
-            Tools.SavePassword(target, pubkey, password);
-            SaveTargetForUser(pubkey, target);
+            Tools.SavePassword("kakoi_" + target, pubkey, nsec);
+            SaveTarget(pubkey, target);
         }
 
-        private static void SaveTargetForUser(string pubkey, string target)
+        private static void SaveTarget(string pubkey, string target)
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            config.AppSettings.Settings.Remove(pubkey + "_target");
-            config.AppSettings.Settings.Add(pubkey + "_target", target);
+            config.AppSettings.Settings.Remove("target");
+            config.AppSettings.Settings.Add("target", target);
             config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
         }
 
-        private static void DeletePreviousTarget(string pubkey)
+        private static void DeletePreviousTarget()
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            var previousTarget = config.AppSettings.Settings[pubkey + "_target"]?.Value;
+            var previousTarget = config.AppSettings.Settings["target"]?.Value;
             if (!string.IsNullOrEmpty(previousTarget))
             {
-                Tools.DeletePassword(previousTarget);
-                config.AppSettings.Settings.Remove(pubkey + "_target");
+                Tools.DeletePassword("kakoi_" + previousTarget);
+                config.AppSettings.Settings.Remove("target");
                 config.Save(ConfigurationSaveMode.Modified);
                 ConfigurationManager.RefreshSection("appSettings");
             }
         }
 
-        private static string GetUserPassword(string? pubkey)
+        private static string LoadNsec()
         {
-            string? target = GetTargetForUser(pubkey);
-            if (target != null)
+            string target = LoadTarget();
+            if (!string.IsNullOrEmpty(target))
             {
-                return Tools.GetPassword(target);
+                return Tools.LoadPassword("kakoi_" + target);
             }
             return string.Empty;
         }
 
-        private static string? GetTargetForUser(string? pubkey)
+        private static string LoadTarget()
         {
             var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            return config.AppSettings.Settings[pubkey + "_target"]?.Value;
+            return config.AppSettings.Settings["target"]?.Value ?? string.Empty;
         }
         #endregion
 

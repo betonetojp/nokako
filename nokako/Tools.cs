@@ -4,6 +4,8 @@ using NNostr.Client;
 using NNostr.Client.JsonConverters;
 using NNostr.Client.Protocols;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -375,24 +377,40 @@ namespace nokako
         }
         #endregion
 
+        #region DPAPI暗号化
+        public static string EncryptPassword(string password)
+        {
+            byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
+            byte[] encryptedBytes = ProtectedData.Protect(passwordBytes, null, DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(encryptedBytes);
+        }
+
+        public static string DecryptPassword(string encryptedPassword)
+        {
+            byte[] encryptedBytes = Convert.FromBase64String(encryptedPassword);
+            byte[] decryptedBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(decryptedBytes);
+        }
+        #endregion
+
         #region Windows資格情報管理
         public static void SavePassword(string target, string username, string password)
         {
             using var cred = new Credential();
             cred.Target = target;
             cred.Username = username;
-            cred.Password = password;
+            cred.Password = EncryptPassword(password); // パスワードを暗号化
             cred.Type = CredentialType.Generic;
             cred.PersistanceType = PersistanceType.LocalComputer;
             cred.Save();
         }
 
-        public static string GetPassword(string target)
+        public static string LoadPassword(string target)
         {
             using var cred = new Credential();
             cred.Target = target;
             cred.Load();
-            return cred.Password;
+            return DecryptPassword(cred.Password); // パスワードを復号化
         }
 
         public static void DeletePassword(string target)

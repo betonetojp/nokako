@@ -28,13 +28,12 @@
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormSetting));
-            textBoxNokakoiKey = new TextBox();
-            textBoxPassword = new TextBox();
+            textBoxNsec = new TextBox();
             trackBarOpacity = new TrackBar();
             checkBoxTopMost = new CheckBox();
             label1 = new Label();
-            label2 = new Label();
             checkBoxAddClient = new CheckBox();
             label4 = new Label();
             linkLabelIcons8 = new LinkLabel();
@@ -43,32 +42,26 @@
             label3 = new Label();
             linkLabelVersion = new LinkLabel();
             checkBoxMinimizeToTray = new CheckBox();
+            label2 = new Label();
+            textBoxNpub = new TextBox();
+            buttonLogOut = new Button();
+            toolTipLogOut = new ToolTip(components);
             ((System.ComponentModel.ISupportInitialize)trackBarOpacity).BeginInit();
             SuspendLayout();
             // 
-            // textBoxNokakoiKey
+            // textBoxNsec
             // 
-            textBoxNokakoiKey.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxNokakoiKey.BorderStyle = BorderStyle.FixedSingle;
-            textBoxNokakoiKey.ImeMode = ImeMode.Disable;
-            textBoxNokakoiKey.Location = new Point(88, 82);
-            textBoxNokakoiKey.MaxLength = 136;
-            textBoxNokakoiKey.Name = "textBoxNokakoiKey";
-            textBoxNokakoiKey.Size = new Size(184, 23);
-            textBoxNokakoiKey.TabIndex = 6;
-            // 
-            // textBoxPassword
-            // 
-            textBoxPassword.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxPassword.BorderStyle = BorderStyle.FixedSingle;
-            textBoxPassword.ImeMode = ImeMode.Disable;
-            textBoxPassword.Location = new Point(88, 111);
-            textBoxPassword.MaxLength = 256;
-            textBoxPassword.Name = "textBoxPassword";
-            textBoxPassword.PasswordChar = '*';
-            textBoxPassword.PlaceholderText = "password";
-            textBoxPassword.Size = new Size(184, 23);
-            textBoxPassword.TabIndex = 7;
+            textBoxNsec.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            textBoxNsec.BorderStyle = BorderStyle.FixedSingle;
+            textBoxNsec.ImeMode = ImeMode.Disable;
+            textBoxNsec.Location = new Point(82, 132);
+            textBoxNsec.MaxLength = 256;
+            textBoxNsec.Name = "textBoxNsec";
+            textBoxNsec.PasswordChar = '*';
+            textBoxNsec.PlaceholderText = "nsec1...";
+            textBoxNsec.Size = new Size(164, 23);
+            textBoxNsec.TabIndex = 10;
+            textBoxNsec.Leave += TextBoxNsec_Leave;
             // 
             // trackBarOpacity
             // 
@@ -101,21 +94,12 @@
             label1.TabIndex = 0;
             label1.Text = "Opacity";
             // 
-            // label2
-            // 
-            label2.AutoSize = true;
-            label2.Location = new Point(12, 84);
-            label2.Name = "label2";
-            label2.Size = new Size(70, 15);
-            label2.TabIndex = 0;
-            label2.Text = "nokakoi key";
-            // 
             // checkBoxAddClient
             // 
             checkBoxAddClient.AutoSize = true;
             checkBoxAddClient.Checked = true;
             checkBoxAddClient.CheckState = CheckState.Checked;
-            checkBoxAddClient.Location = new Point(172, 140);
+            checkBoxAddClient.Location = new Point(12, 107);
             checkBoxAddClient.Name = "checkBoxAddClient";
             checkBoxAddClient.Size = new Size(100, 19);
             checkBoxAddClient.TabIndex = 9;
@@ -167,11 +151,11 @@
             // label3
             // 
             label3.AutoSize = true;
-            label3.Location = new Point(12, 113);
+            label3.Location = new Point(12, 134);
             label3.Name = "label3";
-            label3.Size = new Size(57, 15);
+            label3.Size = new Size(64, 15);
             label3.TabIndex = 0;
-            label3.Text = "password";
+            label3.Text = "Private key";
             // 
             // linkLabelVersion
             // 
@@ -182,24 +166,59 @@
             linkLabelVersion.Size = new Size(37, 15);
             linkLabelVersion.TabIndex = 10;
             linkLabelVersion.TabStop = true;
-            linkLabelVersion.Text = "v0.1.1";
+            linkLabelVersion.Text = "v0.2.0";
             linkLabelVersion.LinkClicked += LinkLabelVersion_LinkClicked;
             // 
             // checkBoxMinimizeToTray
             // 
             checkBoxMinimizeToTray.AutoSize = true;
-            checkBoxMinimizeToTray.Location = new Point(12, 140);
+            checkBoxMinimizeToTray.Location = new Point(12, 82);
             checkBoxMinimizeToTray.Name = "checkBoxMinimizeToTray";
             checkBoxMinimizeToTray.Size = new Size(150, 19);
             checkBoxMinimizeToTray.TabIndex = 8;
             checkBoxMinimizeToTray.Text = "Minimize to system tray";
             checkBoxMinimizeToTray.UseVisualStyleBackColor = true;
             // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new Point(12, 163);
+            label2.Name = "label2";
+            label2.Size = new Size(61, 15);
+            label2.TabIndex = 15;
+            label2.Text = "Public key";
+            // 
+            // textBoxNpub
+            // 
+            textBoxNpub.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            textBoxNpub.BorderStyle = BorderStyle.FixedSingle;
+            textBoxNpub.Location = new Point(82, 161);
+            textBoxNpub.Name = "textBoxNpub";
+            textBoxNpub.PlaceholderText = "npub1...";
+            textBoxNpub.ReadOnly = true;
+            textBoxNpub.Size = new Size(190, 23);
+            textBoxNpub.TabIndex = 12;
+            // 
+            // buttonLogOut
+            // 
+            buttonLogOut.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonLogOut.Image = Properties.Resources.icons8_log_out_16;
+            buttonLogOut.Location = new Point(249, 132);
+            buttonLogOut.Name = "buttonLogOut";
+            buttonLogOut.Size = new Size(23, 23);
+            buttonLogOut.TabIndex = 11;
+            toolTipLogOut.SetToolTip(buttonLogOut, "Log out");
+            buttonLogOut.UseVisualStyleBackColor = true;
+            buttonLogOut.Click += ButtonLogOut_Click;
+            // 
             // FormSetting
             // 
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(284, 261);
+            Controls.Add(buttonLogOut);
+            Controls.Add(textBoxNpub);
+            Controls.Add(label2);
             Controls.Add(checkBoxMinimizeToTray);
             Controls.Add(linkLabelVersion);
             Controls.Add(label3);
@@ -208,12 +227,10 @@
             Controls.Add(linkLabelIcons8);
             Controls.Add(label4);
             Controls.Add(checkBoxAddClient);
-            Controls.Add(label2);
             Controls.Add(label1);
             Controls.Add(checkBoxTopMost);
             Controls.Add(trackBarOpacity);
-            Controls.Add(textBoxPassword);
-            Controls.Add(textBoxNokakoiKey);
+            Controls.Add(textBoxNsec);
             Icon = (Icon)resources.GetObject("$this.Icon");
             KeyPreview = true;
             MaximizeBox = false;
@@ -234,13 +251,10 @@
         }
 
         #endregion
-
-        internal TextBox textBoxNokakoiKey;
-        internal TextBox textBoxPassword;
+        internal TextBox textBoxNsec;
         internal TrackBar trackBarOpacity;
         internal CheckBox checkBoxTopMost;
         private Label label1;
-        private Label label2;
         internal CheckBox checkBoxAddClient;
         private Label label4;
         private LinkLabel linkLabelIcons8;
@@ -249,5 +263,9 @@
         private Label label3;
         private LinkLabel linkLabelVersion;
         internal CheckBox checkBoxMinimizeToTray;
+        private Label label2;
+        internal TextBox textBoxNpub;
+        private Button buttonLogOut;
+        private ToolTip toolTipLogOut;
     }
 }

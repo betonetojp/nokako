@@ -1,5 +1,4 @@
-﻿using nokakoiCrypt;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace nokako
 {
@@ -8,7 +7,19 @@ namespace nokako
         public FormSetting()
         {
             InitializeComponent();
-            textBoxNokakoiKey.PlaceholderText = NokakoiCrypt.NokakoiTag + " . . .";
+
+            // ボタンの画像をDPIに合わせて表示
+            using var graphics = CreateGraphics();
+            float scale = graphics.DpiX / 96f;
+            int size = (int)(16 * scale);
+            if (scale < 2.0f)
+            {
+                buttonLogOut.Image = new Bitmap(Properties.Resources.icons8_log_out_16, size, size);
+            }
+            else
+            {
+                buttonLogOut.Image = new Bitmap(Properties.Resources.icons8_log_out_32, size, size);
+            }
         }
 
         private void FormSetting_Load(object sender, EventArgs e)
@@ -18,7 +29,7 @@ namespace nokako
 
         private void FormSetting_Shown(object sender, EventArgs e)
         {
-            textBoxPassword.Focus();
+            checkBoxTopMost.Focus();
         }
 
         private void FormSetting_KeyDown(object sender, KeyEventArgs e)
@@ -58,6 +69,22 @@ namespace nokako
                 UseShellExecute = true
             };
             Process.Start(app);
+        }
+
+        private void TextBoxNsec_Leave(object sender, EventArgs e)
+        {
+            textBoxNpub.Text = textBoxNsec.Text.GetNpub();
+            if (!string.IsNullOrEmpty(textBoxNpub.Text))
+            {
+                textBoxNsec.Enabled = false;
+            }
+        }
+
+        private void ButtonLogOut_Click(object sender, EventArgs e)
+        {
+            textBoxNsec.Enabled = true;
+            textBoxNsec.Text = string.Empty;
+            textBoxNpub.Text = string.Empty;
         }
     }
 }
