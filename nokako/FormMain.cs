@@ -1327,7 +1327,7 @@ namespace nokako
 
             // 新しいtargetを生成して保存
             string target = Guid.NewGuid().ToString();
-            Tools.SavePassword("kakoi_" + target, pubkey, nsec);
+            Tools.SavePassword("nokako_" + target, pubkey, nsec);
             SaveTarget(pubkey, target);
         }
 
@@ -1346,7 +1346,7 @@ namespace nokako
             var previousTarget = config.AppSettings.Settings["target"]?.Value;
             if (!string.IsNullOrEmpty(previousTarget))
             {
-                Tools.DeletePassword("kakoi_" + previousTarget);
+                Tools.DeletePassword("nokako_" + previousTarget);
                 config.AppSettings.Settings.Remove("target");
                 config.Save(ConfigurationSaveMode.Modified);
                 ConfigurationManager.RefreshSection("appSettings");
@@ -1358,7 +1358,7 @@ namespace nokako
             string target = LoadTarget();
             if (!string.IsNullOrEmpty(target))
             {
-                return Tools.LoadPassword("kakoi_" + target);
+                return Tools.LoadPassword("nokako_" + target);
             }
             return string.Empty;
         }
