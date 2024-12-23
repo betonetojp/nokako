@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using System.Text.Unicode;
 
 namespace nokako
@@ -32,7 +31,7 @@ namespace nokako
         private List<string> _keywords = [];
         private bool _shouldShowBalloon = false;
         private bool _shouldOpenFile = false;
-        private string _fileName = "https://nostter.app/";
+        private string _fileName = "https://lumilumi.app/";
         private string _npub = string.Empty;
 
         private readonly NotifyIcon _notifyIcon;
