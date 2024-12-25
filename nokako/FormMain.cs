@@ -372,37 +372,55 @@ namespace nokako
                             {
                                 continue;
                             }
-
-                            // キーワード通知
+                            // 自分の時は抜ける
                             if (nostrEvent.PublicKey == _npubHex)
                             {
-                                // 自分の時は抜ける
                                 continue;
                             }
+
                             var settings = Notifier.Settings;
-                            string whoToNotify = settings.Npub;
+                            string whoToNotify = string.Empty;
+
+                            // 通知先オーナーコマンド
                             try
                             {
                                 whoToNotify = settings.Npub.ConvertToHex();
                                 if (nostrEvent.PublicKey == whoToNotify)
                                 {
-                                    // 通知先の時
+                                    // 通知有効コマンド
                                     if (content == "on")
                                     {
                                         await PostAsync("通知を有効にしました", nostrEvent);
                                         _enablePost = true;
                                     }
+                                    // 通知無効コマンド
                                     if (content == "off")
                                     {
                                         await PostAsync("通知を無効にしました", nostrEvent);
                                         _enablePost = false;
                                     }
+
+                                    // 通知先のNIP-05を取得
+                                    string npubOrNip05 = settings.Npub;
+                                    if (Users.TryGetValue(whoToNotify, out User? userToNotify) && userToNotify != null && !string.IsNullOrEmpty(userToNotify.Nip05))
+                                    {
+                                        npubOrNip05 = userToNotify.Nip05;
+                                    }
+                                    // 去年のnosttr.appのURLを投稿
                                     if (content == "去年")
                                     {
-                                        // https://nostter.app/ に settings.Npub と 1年前の今日の日付形式のURLを投稿
+                                        // 1年前の今日の日付形式のURLを投稿
                                         string lastYearDate = DateTime.Now.AddYears(-1).ToString("yyyy/MM/dd");
-                                        string url = $"https://nostter.app/{Notifier.Settings.Npub}/{lastYearDate}";
+                                        string url = $"https://nostter.app/{npubOrNip05}/{lastYearDate}";
                                         await PostAsync($"去年の今日は何してたでしょうか\n{url}", nostrEvent);
+                                    }
+                                    // 昨日のnosttr.appのURLを投稿
+                                    if (content == "昨日")
+                                    {
+                                        // 昨日の日付形式のURLを投稿
+                                        string yesterdayDate = DateTime.Now.AddDays(-1).ToString("yyyy/MM/dd");
+                                        string url = $"https://nostter.app/{npubOrNip05}/{yesterdayDate}";
+                                        await PostAsync($"昨日のことを思い出してみませんか\n{url}", nostrEvent);
                                     }
 
                                     // 通知先の時は抜ける
@@ -416,15 +434,15 @@ namespace nokako
                                 continue;
                             }
 
+                            // 通知機能がオフの時は抜ける
                             if (!_enablePost)
                             {
-                                // 通知機能がオフの時は抜ける
                                 continue;
                             }
 
+                            // ポストのclientタグにnokakoiファミリーが含まれていたら通知投稿
                             if (Setting.CheckUserClient)
                             {
-                                // ポストのclientタグにnokakoiファミリーが含まれていたら通知投稿
                                 List<string> clientsToCheck = ["kakoi", "nokako", "nokakoi"];
                                 var userClients = nostrEvent.GetTaggedData("client");
                                 if (userClients != null)
@@ -455,6 +473,7 @@ namespace nokako
                                             // 通知投稿
                                             await NotifyKakoiPostAsync(whoToNotify, client, rootEvent);
 
+                                            // リプライ判定
                                             bool isReply = false;
                                             var e = nostrEvent.GetTaggedData("e");
                                             var p = nostrEvent.GetTaggedData("p");
@@ -492,7 +511,7 @@ namespace nokako
                                 }
                             }
 
-                            // キーワードのポストのみ表示
+                            // キーワード通知投稿
                             var keyword = Notifier.CheckPost(content);
                             if (!string.IsNullOrEmpty(keyword))
                             {
@@ -518,6 +537,7 @@ namespace nokako
                                 // 通知投稿
                                 await NotifyPostAsync(whoToNotify, keyword, rootEvent);
 
+                                // ブラウザで開く
                                 if (settings.Open)
                                 {
                                     NIP19.NostrEventNote nostrEventNote = new()
@@ -541,6 +561,7 @@ namespace nokako
                                     }
                                 }
 
+                                // リプライ判定
                                 bool isReply = false;
                                 var e = nostrEvent.GetTaggedData("e");
                                 var p = nostrEvent.GetTaggedData("p");
@@ -929,6 +950,9 @@ namespace nokako
                         Text = $"nokako - @{loginName}";
                         notifyIcon.Text = $"nokako - @{loginName}";
                     }
+
+                    // 通知先ロフィール購読
+                    await NostrAccess.SubscribeProfilesAsync([Notifier.Settings.Npub.ConvertToHex()]);
                 }
             }
             catch (Exception ex)
