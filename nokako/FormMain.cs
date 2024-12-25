@@ -140,7 +140,7 @@ namespace nokako
                 else
                 {
                     connectCount = await NostrAccess.ConnectAsync();
-                    
+
                     if (NostrAccess.Clients != null)
                     {
                         NostrAccess.Clients.EventsReceived += OnClientOnUsersInfoEventsReceived;
@@ -396,6 +396,13 @@ namespace nokako
                                     {
                                         await PostAsync("通知を無効にしました", nostrEvent);
                                         _enablePost = false;
+                                    }
+                                    if (content == "去年")
+                                    {
+                                        // https://nostter.app/ に settings.Npub と 1年前の今日の日付形式のURLを投稿
+                                        string lastYearDate = DateTime.Now.AddYears(-1).ToString("yyyy/MM/dd");
+                                        string url = $"https://nostter.app/{Notifier.Settings.Npub}/{lastYearDate}";
+                                        await PostAsync($"去年の今日は何してたでしょうか\n{url}", nostrEvent);
                                     }
 
                                     // 通知先の時は抜ける
