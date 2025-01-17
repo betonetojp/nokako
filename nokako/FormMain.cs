@@ -1407,13 +1407,15 @@ namespace nokako
             var now = DateTime.Now;
             var targetTime = new DateTime(now.Year, now.Month, now.Day, 11, 55, 0);
 
-            if (now > targetTime)
+            if (now >= targetTime)
             {
                 targetTime = targetTime.AddDays(1);
             }
 
             TimeSpan timeToGo = targetTime - now;
-            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, TimeSpan.FromDays(1));
+            //_dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, TimeSpan.FromDays(1));
+            _dailyTimer?.Dispose();
+            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, Timeout.InfiniteTimeSpan);
         }
 
         private async void DailyTimerCallback(object? state)
@@ -1469,6 +1471,9 @@ namespace nokako
                 labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnection failed."));
                 MessageBox.Show($"再接続に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+
+            // 次のタイマーを再スケジュール
+            SetDailyTimer();
         }
 
         #endregion
