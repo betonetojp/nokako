@@ -1475,9 +1475,9 @@ namespace nokako
             // 次のタイマーを再スケジュール
             SetDailyTimer();
         }
-
         #endregion
 
+        #region タスクトレイ
         private void NotifyIcon_Click(object sender, EventArgs e)
         {
             // 右クリック時は抜ける
@@ -1523,5 +1523,6 @@ namespace nokako
                 Hide();
             }
         }
+        #endregion
     }
 }
