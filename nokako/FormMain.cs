@@ -951,8 +951,8 @@ namespace nokako
                         notifyIcon.Text = $"nokako - @{loginName}";
                     }
 
-                    // 通知先ロフィール購読
-                    await NostrAccess.SubscribeProfilesAsync([Notifier.Settings.Npub.ConvertToHex()]);
+                    // 自分と通知先のプロフィール購読
+                    await NostrAccess.SubscribeProfilesAsync([_npubHex, Notifier.Settings.Npub.ConvertToHex()]);
                 }
             }
             catch (Exception ex)
