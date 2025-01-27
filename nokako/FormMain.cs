@@ -390,13 +390,13 @@ namespace nokako
                                     // 通知有効コマンド
                                     if (content == "on")
                                     {
-                                        await PostAsync("通知を有効にしました", nostrEvent);
+                                        await PostAsync("通知を有効にしました。", nostrEvent);
                                         _enablePost = true;
                                     }
                                     // 通知無効コマンド
                                     if (content == "off")
                                     {
-                                        await PostAsync("通知を無効にしました", nostrEvent);
+                                        await PostAsync("通知を無効にしました。", nostrEvent);
                                         _enablePost = false;
                                     }
 
@@ -412,7 +412,7 @@ namespace nokako
                                         // 1年前の今日の日付形式のURLを投稿
                                         string lastYearDate = DateTime.Now.AddYears(-1).ToString("yyyy/MM/dd");
                                         string url = $"https://nostter.app/{npubOrNip05}/{lastYearDate}";
-                                        await PostAsync($"去年の今日は何してたでしょうか\n{url}", nostrEvent);
+                                        await PostAsync($"去年の今日は何してたでしょうか？\n{url}", nostrEvent);
                                     }
                                     // 昨日のnosttr.appのURLを投稿
                                     if (content == "昨日")
@@ -420,7 +420,7 @@ namespace nokako
                                         // 昨日の日付形式のURLを投稿
                                         string yesterdayDate = DateTime.Now.AddDays(-1).ToString("yyyy/MM/dd");
                                         string url = $"https://nostter.app/{npubOrNip05}/{yesterdayDate}";
-                                        await PostAsync($"昨日のことを思い出してみませんか\n{url}", nostrEvent);
+                                        await PostAsync($"昨日のことを思い出してみませんか？\n{url}", nostrEvent);
                                     }
 
                                     // 通知先の時は抜ける
@@ -443,7 +443,7 @@ namespace nokako
                             // ポストのclientタグにnokakoiファミリーが含まれていたら通知投稿
                             if (Setting.CheckUserClient)
                             {
-                                List<string> clientsToCheck = ["kakoi", "nokako", "nokakoi"];
+                                List<string> clientsToCheck = ["kakoi", "nokako", "nokakoi", "kako"];
                                 var userClients = nostrEvent.GetTaggedData("client");
                                 if (userClients != null)
                                 {
@@ -765,7 +765,7 @@ namespace nokako
             }
             _lastNotifyKakoiPostTime = DateTime.Now;
 
-            string content = $"{client}での投稿ですよ";
+            string content = $"{client}での投稿ですよ。";
             // create tags
             List<NostrEventTag> tags = [];
             tags.Add(new NostrEventTag() { TagIdentifier = "p", Data = [whoToNotify] });
@@ -777,7 +777,7 @@ namespace nokako
                     Relays = [string.Empty],
                 };
                 tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, string.Empty] });
-                content = $"{GetUserName(rootEvent.PublicKey)}さんが{client}で投稿してくれました{Environment.NewLine}nostr:{eventNote.ToNIP19()}";
+                content = $"{GetUserName(rootEvent.PublicKey)}さんが{client}で投稿してくれました。{Environment.NewLine}nostr:{eventNote.ToNIP19()}";
             }
             if (_addClient)
             {
@@ -835,7 +835,7 @@ namespace nokako
             }
             _lastNotifyPostTime = DateTime.Now;
 
-            string content = "うわさされてるみたいですよ";
+            string content = "うわさされてるみたいですよ。";
             // create tags
             List<NostrEventTag> tags = [];
             tags.Add(new NostrEventTag() { TagIdentifier = "p", Data = [whoToNotify] });
@@ -847,7 +847,7 @@ namespace nokako
                     Relays = [string.Empty],
                 };
                 tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, string.Empty] });
-                content = $"{GetUserName(rootEvent.PublicKey)}さんが{keyword}のことうわさしてるみたいですよ{Environment.NewLine}nostr:{eventNote.ToNIP19()}";
+                content = $"{GetUserName(rootEvent.PublicKey)}さんが{keyword}のことうわさしてるみたいですよ。{Environment.NewLine}nostr:{eventNote.ToNIP19()}";
             }
             if (_addClient)
             {
