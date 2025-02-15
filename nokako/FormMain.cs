@@ -1402,22 +1402,21 @@ namespace nokako
         #endregion
 
         #region デイリータイマー
+        // デイリータイマーの設定を毎時に変更
         private void SetDailyTimer()
         {
             var now = DateTime.Now;
-            var targetTime = new DateTime(now.Year, now.Month, now.Day, 11, 55, 0);
-
-            if (now >= targetTime)
+            var nextTrigger = new DateTime(now.Year, now.Month, now.Day, now.Hour, 55, 0);
+            if (now.Minute >= 55)
             {
-                targetTime = targetTime.AddDays(1);
+                nextTrigger = nextTrigger.AddHours(1);
             }
-
-            TimeSpan timeToGo = targetTime - now;
-            //_dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, TimeSpan.FromDays(1));
+            TimeSpan timeToGo = nextTrigger - now;
             _dailyTimer?.Dispose();
-            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, Timeout.InfiniteTimeSpan);
+            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, TimeSpan.FromHours(1));
         }
 
+        // デイリータイマーのコールバック
         private async void DailyTimerCallback(object? state)
         {
             if (NostrAccess.Clients == null)
@@ -1436,31 +1435,36 @@ namespace nokako
                 // ログイン済みの時
                 if (!string.IsNullOrEmpty(_npubHex))
                 {
-                    // フォロイーを購読をする
+                    // フォロイーを購読する
                     await NostrAccess.SubscribeFollowsAsync(_npubHex);
                 }
 
                 labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnected successfully."));
 
-                await PostAsync("そろそろお昼ですよ");
+                // 11:55 のときだけ投稿を実行
+                var now = DateTime.Now;
+                if (now.Hour == 11 && now.Minute == 55)
+                {
+                    await PostAsync("そろそろお昼ですよ");
+                }
 
-                // 投稿後にlabelRelays.TextとtoolTipRelaysを元に戻す
+                // 投稿後に labelRelays.Text と toolTipRelays を元に戻す
                 labelRelays.Invoke((MethodInvoker)(() =>
                 {
                     int relayCount = NostrAccess.Relays.Length;
+
+                    toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
+
                     switch (relayCount)
                     {
                         case 0:
                             labelRelays.Text = "No relay enabled.";
-                            toolTipRelays.SetToolTip(labelRelays, string.Empty);
                             break;
                         case 1:
-                            labelRelays.Text = NostrAccess.RelayStatusList[0];
-                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
+                            labelRelays.Text = $"{NostrAccess.Relays.Length} relay";
                             break;
                         default:
                             labelRelays.Text = $"{NostrAccess.Relays.Length} relays";
-                            toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
                             break;
                     }
                 }));
@@ -1472,8 +1476,7 @@ namespace nokako
                 MessageBox.Show($"再接続に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
-            // 次のタイマーを再スケジュール
-            SetDailyTimer();
+            // タイマーは毎時実行されるので再設定は不要
         }
         #endregion
 
