@@ -908,6 +908,8 @@ namespace nokako
             notifyIcon.Visible = _minimizeToTray;
             _addClient = _formSetting.checkBoxAddClient.Checked;
             _nsec = _formSetting.textBoxNsec.Text;
+            // タイマーの初期化
+            SetDailyTimer();
 
             try
             {
@@ -1402,7 +1404,6 @@ namespace nokako
         #endregion
 
         #region デイリータイマー
-        // デイリータイマーの設定を毎時に変更
         private void SetDailyTimer()
         {
             var now = DateTime.Now;
@@ -1413,7 +1414,7 @@ namespace nokako
             }
             TimeSpan timeToGo = nextTrigger - now;
             _dailyTimer?.Dispose();
-            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, TimeSpan.FromHours(1));
+            _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, Timeout.InfiniteTimeSpan);
         }
 
         // デイリータイマーのコールバック
@@ -1476,7 +1477,8 @@ namespace nokako
                 MessageBox.Show($"再接続に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
-            // タイマーは毎時実行されるので再設定は不要
+            // タイマーを再設定して毎時実行されるようにする
+            SetDailyTimer();
         }
         #endregion
 
