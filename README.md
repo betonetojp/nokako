@@ -14,3 +14,9 @@ Tiny nostr notification bot client for windows.
 - on と投稿すると通知を再開します。
 - 去年 と投稿するとnostterで去年の投稿を表示するリンクを返信します。
 - 昨日 と投稿するとnostterで昨日の投稿を表示するリンクを返信します。
+
+## 利用NuGetパッケージ
+- [CredentialManagement](https://www.nuget.org/packages/CredentialManagement)
+
+## Nostrクライアントライブラリ
+- [NNostr](https://github.com/Kukks/NNostr) 内のNNostr.Client Ver0.0.49を一部変更して利用しています。
