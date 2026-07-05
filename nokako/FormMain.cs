@@ -792,12 +792,13 @@ namespace nokako
             tags.Add(new NostrEventTag() { TagIdentifier = "p", Data = [whoToNotify] });
             if (rootEvent != null)
             {
+                var targetRelayHint = GetBestRelayHint(rootEvent.Id);
                 var eventNote = new NIP19.NostrEventNote()
                 {
                     EventId = rootEvent.Id,
-                    Relays = [string.Empty],
+                    Relays = [targetRelayHint],
                 };
-                tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, string.Empty] });
+                tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, targetRelayHint, rootEvent.PublicKey] });
                 content = $"{GetUserName(rootEvent.PublicKey)}さんが{client}で投稿してくれました。{Environment.NewLine}nostr:{eventNote.ToNIP19()}";
             }
             if (_addClient)
@@ -862,12 +863,13 @@ namespace nokako
             tags.Add(new NostrEventTag() { TagIdentifier = "p", Data = [whoToNotify] });
             if (rootEvent != null)
             {
+                var targetRelayHint = GetBestRelayHint(rootEvent.Id);
                 var eventNote = new NIP19.NostrEventNote()
                 {
                     EventId = rootEvent.Id,
-                    Relays = [string.Empty],
+                    Relays = [targetRelayHint],
                 };
-                tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, string.Empty] });
+                tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, targetRelayHint, rootEvent.PublicKey] });
                 content = $"{GetUserName(rootEvent.PublicKey)}さんが{keyword}のことうわさしてるみたいですよ。{Environment.NewLine}nostr:{eventNote.ToNIP19()}";
             }
             if (_addClient)
