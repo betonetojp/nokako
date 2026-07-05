@@ -1,4 +1,4 @@
-﻿using NNostr.Client;
+using NNostr.Client;
 using NNostr.Client.Protocols;
 using nokako.Properties;
 using System.Configuration;
@@ -48,6 +48,9 @@ namespace nokako
         private static readonly TimeSpan NotifyInterval = TimeSpan.FromSeconds(60);
         // 投稿機能有効フラグ
         private bool _enablePost = true;
+
+        // 受信イベントのリレー追跡
+        private readonly Dictionary<string, List<string>> _eventSeenOn = [];
 
         private System.Threading.Timer? _dailyTimer;
         private bool _reallyClose = false;
@@ -293,6 +296,23 @@ namespace nokako
                 #region タイムライン購読
                 foreach (var nostrEvent in args.events)
                 {
+                    var relay = (sender as NostrClient)?.Relay?.ToString();
+                    if (!string.IsNullOrEmpty(relay))
+                    {
+                        lock (_eventSeenOn)
+                        {
+                            if (!_eventSeenOn.TryGetValue(nostrEvent.Id, out var relays))
+                            {
+                                relays = [];
+                                _eventSeenOn[nostrEvent.Id] = relays;
+                            }
+                            if (!relays.Contains(relay))
+                            {
+                                relays.Add(relay);
+                            }
+                        }
+                    }
+
                     if (RemoveCompletedEventIds(nostrEvent.Id))
                     {
                         continue;
@@ -703,13 +723,14 @@ namespace nokako
             List<NostrEventTag> tags = [];
             if (rootEvent != null)
             {
+                var targetRelayHint = GetBestRelayHint(rootEvent.Id);
                 if (isQuote)
                 {
-                    tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, string.Empty] });
+                    tags.Add(new NostrEventTag() { TagIdentifier = "q", Data = [rootEvent.Id, targetRelayHint, rootEvent.PublicKey] });
                 }
                 else
                 {
-                    tags.Add(new NostrEventTag() { TagIdentifier = "e", Data = [rootEvent.Id, string.Empty] });
+                    tags.Add(new NostrEventTag() { TagIdentifier = "e", Data = [rootEvent.Id, targetRelayHint] });
                     tags.Add(new NostrEventTag() { TagIdentifier = "p", Data = [rootEvent.PublicKey] });
                 }
             }
@@ -1529,5 +1550,42 @@ namespace nokako
             }
         }
         #endregion
+
+        private string GetBestRelayHint(string eventId)
+        {
+            if (string.IsNullOrEmpty(eventId)) return string.Empty;
+
+            List<string>? seenOn = null;
+            lock (_eventSeenOn)
+            {
+                if (_eventSeenOn.TryGetValue(eventId, out var list))
+                {
+                    seenOn = new List<string>(list);
+                }
+            }
+
+            if (seenOn == null || seenOn.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            if (NostrAccess.Relays != null)
+            {
+                foreach (var r in NostrAccess.Relays)
+                {
+                    var rStr = NormalizeRelayUrl(r.ToString());
+                    var found = seenOn.FirstOrDefault(s => NormalizeRelayUrl(s) == rStr);
+                    if (found != null) return found;
+                }
+            }
+
+            return seenOn[0];
+        }
+
+        private static string NormalizeRelayUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return string.Empty;
+            return url.Trim().TrimEnd('/');
+        }
     }
 }
