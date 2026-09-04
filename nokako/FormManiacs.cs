@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 namespace nokako
 {
@@ -15,7 +15,12 @@ namespace nokako
             if (MainForm != null)
             {
                 dataGridViewUsers.Rows.Clear();
-                foreach (var user in MainForm.Users)
+                KeyValuePair<string, User?>[] userArray;
+                lock (MainForm.Users)
+                {
+                    userArray = MainForm.Users.ToArray();
+                }
+                foreach (var user in userArray)
                 {
                     dataGridViewUsers.Rows.Add(
                         user.Value?.Mute,
@@ -67,7 +72,10 @@ namespace nokako
                         users.Add(pubkey, user);
                     }
                 }
-                MainForm.Users = users;
+                lock (MainForm.Users)
+                {
+                    MainForm.Users = users;
+                }
                 var settings = MainForm.Notifier.Settings;
                 settings.MuteMostr = checkBoxMuteMostr.Checked;
                 settings.Keywords = [.. textBoxKeywords.Text.Split(["\r\n"], StringSplitOptions.RemoveEmptyEntries)];

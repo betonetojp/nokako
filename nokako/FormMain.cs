@@ -55,6 +55,7 @@ namespace nokako
         private System.Threading.Timer? _dailyTimer;
         private bool _reallyClose = false;
         private static Mutex? _mutex;
+        private readonly HashSet<string> _fetchingProfileHexs = [];
         #endregion
 
         #region コンストラクタ
@@ -79,7 +80,8 @@ namespace nokako
             }
 
             // ボタンの画像をDPIに合わせて表示
-            float scale = CreateGraphics().DpiX / 96f;
+            using var graphics = CreateGraphics();
+            float scale = graphics.DpiX / 96f;
             int size = (int)(16 * scale);
             if (scale < 2.0f)
             {
@@ -146,7 +148,9 @@ namespace nokako
 
                     if (NostrAccess.Clients != null)
                     {
+                        NostrAccess.Clients.EventsReceived -= OnClientOnUsersInfoEventsReceived;
                         NostrAccess.Clients.EventsReceived += OnClientOnUsersInfoEventsReceived;
+                        NostrAccess.Clients.EventsReceived -= OnClientOnTimeLineEventsReceived;
                         NostrAccess.Clients.EventsReceived += OnClientOnTimeLineEventsReceived;
                     }
                 }
@@ -269,11 +273,19 @@ namespace nokako
                             {
                                 newUserData.LastActivity = DateTime.Now;
                                 newUserData.PetName = existingUserData?.PetName;
-                                Tools.SaveUsers(Users);
-                                // 辞書に追加（上書き）
-                                Users[nostrEvent.PublicKey] = newUserData;
+                                lock (Users)
+                                {
+                                    // 辞書に追加（上書き）
+                                    Users[nostrEvent.PublicKey] = newUserData;
+                                }
                                 Debug.WriteLine($"cratedAt updated {cratedAt} -> {newUserData.CreatedAt}");
                                 Debug.WriteLine($"プロフィール更新: {newUserData.DisplayName} @{newUserData.Name}");
+
+                                var resolvedName = GetUserName(nostrEvent.PublicKey);
+                                if (dataGridViewNotes.IsHandleCreated)
+                                {
+                                    dataGridViewNotes.BeginInvoke(new Action(() => UpdateGridProfile(nostrEvent.PublicKey, resolvedName)));
+                                }
                             }
                         }
                     }
@@ -337,16 +349,9 @@ namespace nokako
                             // ログイン済みで自分へのリアクション
                             if (!string.IsNullOrEmpty(_npubHex) && nostrEvent.GetTaggedPublicKeys().Contains(_npubHex))
                             {
-                                // プロフィール購読
-                                await NostrAccess.SubscribeProfilesAsync([nostrEvent.PublicKey]);
+                                // プロフィール取得を裏で要求
+                                FetchProfileIfNeeded(nostrEvent.PublicKey);
 
-                                // ユーザー取得
-                                user = await GetUserAsync(nostrEvent.PublicKey);
-                                // ユーザーが見つからない時は表示しない
-                                if (user == null)
-                                {
-                                    continue;
-                                }
                                 // ユーザー表示名取得
                                 userName = GetUserName(nostrEvent.PublicKey);
 
@@ -471,16 +476,9 @@ namespace nokako
                                     {
                                         if (userClients.Contains(client))
                                         {
-                                            // プロフィール購読
-                                            await NostrAccess.SubscribeProfilesAsync([nostrEvent.PublicKey]);
+                                            // プロフィール取得を裏で要求
+                                            FetchProfileIfNeeded(nostrEvent.PublicKey);
 
-                                            // ユーザー取得
-                                            user = await GetUserAsync(nostrEvent.PublicKey);
-                                            // ユーザーが見つからない時は表示しない
-                                            if (user == null)
-                                            {
-                                                continue;
-                                            }
                                             // ユーザー表示名取得
                                             userName = GetUserName(nostrEvent.PublicKey);
 
@@ -535,16 +533,9 @@ namespace nokako
                             var keyword = Notifier.CheckPost(content);
                             if (!string.IsNullOrEmpty(keyword))
                             {
-                                // プロフィール購読
-                                await NostrAccess.SubscribeProfilesAsync([nostrEvent.PublicKey]);
+                                // プロフィール取得を裏で要求
+                                FetchProfileIfNeeded(nostrEvent.PublicKey);
 
-                                // ユーザー取得
-                                user = await GetUserAsync(nostrEvent.PublicKey);
-                                // ユーザーが見つからない時は表示しない
-                                if (user == null)
-                                {
-                                    continue;
-                                }
                                 // ユーザー表示名取得
                                 userName = GetUserName(nostrEvent.PublicKey);
 
@@ -655,31 +646,9 @@ namespace nokako
         }
         #endregion
 
-        #region ユーザー取得
-        private async Task<User?> GetUserAsync(string pubkey)
-        {
-            User? user = null;
-            int retryCount = 0;
-            while (retryCount < 10)
-            {
-                Debug.WriteLine($"retryCount = {retryCount} {GetUserName(pubkey)}");
-                Users.TryGetValue(pubkey, out user);
-                // ユーザーが見つかった場合、ループを抜ける
-                if (user != null)
-                {
-                    break;
-                }
-                // 一定時間待機してから再試行
-                await Task.Delay(100);
-                retryCount++;
-            }
-            return user;
-        }
-        #endregion
-
         #region Stopボタン
         // Stopボタン
-        private void ButtonStop_Click(object sender, EventArgs e)
+        private async void ButtonStop_Click(object sender, EventArgs e)
         {
             if (NostrAccess.Clients == null)
             {
@@ -691,10 +660,13 @@ namespace nokako
                 NostrAccess.CloseSubscriptions();
                 labelRelays.Text = "Close subscription.";
 
-                _ = NostrAccess.Clients.Disconnect();
+                await NostrAccess.Clients.Disconnect();
                 labelRelays.Text = "Disconnect.";
                 NostrAccess.Clients.Dispose();
                 NostrAccess.Clients = null;
+
+                NostrAccess.DisconnectAndDispose();
+                Tools.SaveUsers(Users);
 
                 buttonStart.Enabled = true;
                 buttonStart.Focus();
@@ -1053,7 +1025,6 @@ namespace nokako
                 userName = user.Name;
                 // 取得日更新
                 user.LastActivity = DateTime.Now;
-                Tools.SaveUsers(Users);
             }
             return userName;
         }
@@ -1085,7 +1056,6 @@ namespace nokako
                 }
                 // 取得日更新
                 user.LastActivity = DateTime.Now;
-                Tools.SaveUsers(Users);
                 //Debug.WriteLine($"名前取得: {user.DisplayName} @{user.Name} 📛{user.PetName}");
             }
             return userName;
@@ -1589,5 +1559,107 @@ namespace nokako
             if (string.IsNullOrEmpty(url)) return string.Empty;
             return url.Trim().TrimEnd('/');
         }
+
+        #region プロフィール取得（インデクサ連携）
+        private void FetchProfileIfNeeded(string pubkey)
+        {
+            if (string.IsNullOrEmpty(pubkey)) return;
+
+            // 既に有効な表示名がある場合は再取得不要
+            if (Users.TryGetValue(pubkey, out var existingUser) && existingUser != null)
+            {
+                if (!string.IsNullOrEmpty(existingUser.DisplayName) || !string.IsNullOrEmpty(existingUser.Name))
+                {
+                    return;
+                }
+            }
+
+            lock (_fetchingProfileHexs)
+            {
+                if (_fetchingProfileHexs.Contains(pubkey)) return;
+                _fetchingProfileHexs.Add(pubkey);
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var profileEvent = await NostrAccess.FetchProfileFromIndexerAsync(pubkey);
+                    if (profileEvent?.Content != null)
+                    {
+                        var newUserData = Tools.JsonToUser(profileEvent.Content, profileEvent.CreatedAt, Notifier.Settings.MuteMostr);
+                        if (newUserData != null)
+                        {
+                            string resolvedName = string.Empty;
+                            lock (Users)
+                            {
+                                DateTimeOffset? createdAt = DateTimeOffset.MinValue;
+                                if (Users.TryGetValue(pubkey, out User? existingUserData))
+                                {
+                                    createdAt = existingUserData?.CreatedAt;
+                                    newUserData.PetName = existingUserData?.PetName;
+                                    if (false == existingUserData?.Mute)
+                                    {
+                                        newUserData.Mute = false;
+                                    }
+                                }
+                                if (createdAt == null || (createdAt < newUserData.CreatedAt))
+                                {
+                                    newUserData.LastActivity = DateTime.Now;
+                                    Users[pubkey] = newUserData;
+                                    Debug.WriteLine($"[Indexer] プロフィール取得成功: {newUserData.DisplayName} @{newUserData.Name} ({pubkey[..8]})");
+                                }
+                            }
+
+                            resolvedName = GetUserName(pubkey);
+                            if (dataGridViewNotes.IsHandleCreated)
+                            {
+                                dataGridViewNotes.BeginInvoke(new Action(() => UpdateGridProfile(pubkey, resolvedName)));
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"FetchProfileIfNeeded エラー: {ex.Message}");
+                }
+                finally
+                {
+                    lock (_fetchingProfileHexs)
+                    {
+                        _fetchingProfileHexs.Remove(pubkey);
+                    }
+                }
+            });
+        }
+
+        private void UpdateGridProfile(string pubkey, string name)
+        {
+            try
+            {
+                foreach (DataGridViewRow row in dataGridViewNotes.Rows)
+                {
+                    if (row.Cells["pubkey"]?.Value?.ToString() == pubkey)
+                    {
+                        var currentNameCell = row.Cells["name"]?.Value?.ToString();
+                        if (!string.IsNullOrEmpty(currentNameCell))
+                        {
+                            // プレフィックス（+ , - , * 等）を保持して更新
+                            string prefix = "";
+                            if (currentNameCell.Length >= 2 && currentNameCell[1] == ' ')
+                            {
+                                prefix = currentNameCell.Substring(0, 2);
+                            }
+                            row.Cells["name"].Value = $"{prefix}{name}";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"UpdateGridProfile エラー: {ex.Message}");
+            }
+        }
+        #endregion
     }
 }
