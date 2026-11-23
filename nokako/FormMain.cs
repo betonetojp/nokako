@@ -55,7 +55,10 @@ namespace nokako
         private System.Threading.Timer? _dailyTimer;
         private bool _reallyClose = false;
         private static Mutex? _mutex;
-        private readonly HashSet<string> _fetchingProfileHexs = [];
+        private readonly Dictionary<string, Task> _fetchingProfileTasks = [];
+        private readonly Dictionary<string, DateTime> _profileLastFetchedAt = [];
+        private static readonly TimeSpan ProfileRefreshInterval = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan ProfileRetryCooldown = TimeSpan.FromMinutes(1);
         #endregion
 
         #region コンストラクタ
@@ -183,6 +186,16 @@ namespace nokako
                     // フォロイーを購読をする
                     await NostrAccess.SubscribeFollowsAsync(_npubHex);
 
+                    // 自分と通知先のプロフィール購読
+                    var profileTargets = new[] { _npubHex, Notifier.Settings.Npub.ConvertToHex() }
+                        .Where(pk => !string.IsNullOrEmpty(pk))
+                        .Distinct()
+                        .ToArray();
+                    if (profileTargets.Length > 0)
+                    {
+                        await NostrAccess.SubscribeProfilesAsync(profileTargets);
+                    }
+
                     // ログインユーザー名取得
                     var loginName = GetName(_npubHex);
                     if (!string.IsNullOrEmpty(loginName))
@@ -231,10 +244,13 @@ namespace nokako
                                 // petnameをユーザー辞書に保存
                                 if (2 < tag.Data.Count)
                                 {
-                                    Users.TryGetValue(tag.Data[0], out User? user);
-                                    if (user != null)
+                                    lock (Users)
                                     {
-                                        user.PetName = tag.Data[2];
+                                        Users.TryGetValue(tag.Data[0], out User? user);
+                                        if (user != null)
+                                        {
+                                            user.PetName = tag.Data[2];
+                                        }
                                     }
                                 }
                             }
@@ -259,30 +275,35 @@ namespace nokako
                         var newUserData = Tools.JsonToUser(nostrEvent.Content, nostrEvent.CreatedAt, Notifier.Settings.MuteMostr);
                         if (newUserData != null)
                         {
-                            DateTimeOffset? cratedAt = DateTimeOffset.MinValue;
-                            if (Users.TryGetValue(nostrEvent.PublicKey, out User? existingUserData))
+                            bool updated = false;
+                            lock (Users)
                             {
-                                cratedAt = existingUserData?.CreatedAt;
-                            }
-                            if (false == existingUserData?.Mute)
-                            {
-                                // 既にミュートオフのMostrアカウントのミュートを解除
-                                newUserData.Mute = false;
-                            }
-                            if (cratedAt == null || (cratedAt < newUserData.CreatedAt))
-                            {
-                                newUserData.LastActivity = DateTime.Now;
-                                newUserData.PetName = existingUserData?.PetName;
-                                lock (Users)
+                                DateTimeOffset? createdAt = DateTimeOffset.MinValue;
+                                if (Users.TryGetValue(nostrEvent.PublicKey, out User? existingUserData))
                                 {
+                                    createdAt = existingUserData?.CreatedAt;
+                                }
+                                if (false == existingUserData?.Mute)
+                                {
+                                    // 既にミュートオフのMostrアカウントのミュートを解除
+                                    newUserData.Mute = false;
+                                }
+                                if (createdAt == null || (createdAt < newUserData.CreatedAt))
+                                {
+                                    newUserData.LastActivity = DateTime.Now;
+                                    newUserData.PetName = existingUserData?.PetName;
                                     // 辞書に追加（上書き）
                                     Users[nostrEvent.PublicKey] = newUserData;
+                                    updated = true;
+                                    Debug.WriteLine($"createdAt updated {createdAt} -> {newUserData.CreatedAt}");
+                                    Debug.WriteLine($"プロフィール更新: {newUserData.DisplayName} @{newUserData.Name}");
                                 }
-                                Debug.WriteLine($"cratedAt updated {cratedAt} -> {newUserData.CreatedAt}");
-                                Debug.WriteLine($"プロフィール更新: {newUserData.DisplayName} @{newUserData.Name}");
+                            }
 
+                            if (updated)
+                            {
                                 var resolvedName = GetUserName(nostrEvent.PublicKey);
-                                if (dataGridViewNotes.IsHandleCreated)
+                                if (!IsDisposed && dataGridViewNotes.IsHandleCreated)
                                 {
                                     dataGridViewNotes.BeginInvoke(new Action(() => UpdateGridProfile(nostrEvent.PublicKey, resolvedName)));
                                 }
@@ -334,7 +355,6 @@ namespace nokako
                     if (content != null)
                     {
                         string userName = string.Empty;
-                        User? user = null;
 
                         // フォロイーチェック
                         string headMark = "-";
@@ -349,8 +369,8 @@ namespace nokako
                             // ログイン済みで自分へのリアクション
                             if (!string.IsNullOrEmpty(_npubHex) && nostrEvent.GetTaggedPublicKeys().Contains(_npubHex))
                             {
-                                // プロフィール取得を裏で要求
-                                FetchProfileIfNeeded(nostrEvent.PublicKey);
+                                // プロフィール最新化を待つ
+                                await FetchProfileIfNeededAsync(nostrEvent.PublicKey);
 
                                 // ユーザー表示名取得
                                 userName = GetUserName(nostrEvent.PublicKey);
@@ -427,7 +447,12 @@ namespace nokako
 
                                     // 通知先のNIP-05を取得
                                     string npubOrNip05 = settings.Npub;
-                                    if (Users.TryGetValue(whoToNotify, out User? userToNotify) && userToNotify != null && !string.IsNullOrEmpty(userToNotify.Nip05))
+                                    User? userToNotify;
+                                    lock (Users)
+                                    {
+                                        Users.TryGetValue(whoToNotify, out userToNotify);
+                                    }
+                                    if (userToNotify != null && !string.IsNullOrEmpty(userToNotify.Nip05))
                                     {
                                         npubOrNip05 = userToNotify.Nip05;
                                     }
@@ -476,8 +501,8 @@ namespace nokako
                                     {
                                         if (userClients.Contains(client))
                                         {
-                                            // プロフィール取得を裏で要求
-                                            FetchProfileIfNeeded(nostrEvent.PublicKey);
+                                            // プロフィール最新化を待ってから通知投稿・表示
+                                            await FetchProfileIfNeededAsync(nostrEvent.PublicKey);
 
                                             // ユーザー表示名取得
                                             userName = GetUserName(nostrEvent.PublicKey);
@@ -533,8 +558,8 @@ namespace nokako
                             var keyword = Notifier.CheckPost(content);
                             if (!string.IsNullOrEmpty(keyword))
                             {
-                                // プロフィール取得を裏で要求
-                                FetchProfileIfNeeded(nostrEvent.PublicKey);
+                                // プロフィール最新化を待ってから通知投稿・表示
+                                await FetchProfileIfNeededAsync(nostrEvent.PublicKey);
 
                                 // ユーザー表示名取得
                                 userName = GetUserName(nostrEvent.PublicKey);
@@ -624,9 +649,12 @@ namespace nokako
             // avatar列のToolTipに表示名を設定
             dataGridViewNotes.Rows[0].Cells["avatar"].ToolTipText = userName;
 
-            // avastar列の背景色をpubkeyColorに変更
-            var pubkeyColor = Tools.HexToColor(nostrEvent.PublicKey[..6]); // [i..j] で「i番目からj番目の範囲」
-            dataGridViewNotes.Rows[0].Cells["avatar"].Style.BackColor = pubkeyColor;
+            // avatar列の背景色をpubkeyColorに変更
+            if (!string.IsNullOrEmpty(nostrEvent.PublicKey) && nostrEvent.PublicKey.Length >= 6)
+            {
+                var pubkeyColor = Tools.HexToColor(nostrEvent.PublicKey[..6]); // [i..j] で「i番目からj番目の範囲」
+                dataGridViewNotes.Rows[0].Cells["avatar"].Style.BackColor = pubkeyColor;
+            }
 
             // クライアントタグによる背景色変更
             var userClient = nostrEvent.GetTaggedData("client");
@@ -718,7 +746,7 @@ namespace nokako
             var newEvent = new NostrEvent()
             {
                 Kind = 1,
-                Content = content.Replace("\r\n", "\n"),
+                Content = content.Replace("\r\n", "\n").Replace("\r", "\n"),
                 Tags = tags
             };
 
@@ -785,7 +813,7 @@ namespace nokako
             var newEvent = new NostrEvent()
             {
                 Kind = 1,
-                Content = content.Replace("\r\n", "\n"),
+                Content = content.Replace("\r\n", "\n").Replace("\r", "\n"),
                 Tags = tags
             };
 
@@ -856,7 +884,7 @@ namespace nokako
             var newEvent = new NostrEvent()
             {
                 Kind = 1,
-                Content = content.Replace("\r\n", "\n"),
+                Content = content.Replace("\r\n", "\n").Replace("\r", "\n"),
                 Tags = tags
             };
 
@@ -949,7 +977,14 @@ namespace nokako
                     }
 
                     // 自分と通知先のプロフィール購読
-                    await NostrAccess.SubscribeProfilesAsync([_npubHex, Notifier.Settings.Npub.ConvertToHex()]);
+                    var profileTargets = new[] { _npubHex, Notifier.Settings.Npub.ConvertToHex() }
+                        .Where(pk => !string.IsNullOrEmpty(pk))
+                        .Distinct()
+                        .ToArray();
+                    if (profileTargets.Length > 0)
+                    {
+                        await NostrAccess.SubscribeProfilesAsync(profileTargets);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1018,11 +1053,15 @@ namespace nokako
         private string? GetName(string publicKeyHex)
         {
             // 情報があればユーザー名を取得
-            Users.TryGetValue(publicKeyHex, out User? user);
+            User? user;
+            lock (Users)
+            {
+                Users.TryGetValue(publicKeyHex, out user);
+            }
             string? userName = string.Empty;
             if (user != null)
             {
-                userName = user.Name;
+                userName = !string.IsNullOrEmpty(user.Name) ? user.Name : user.DisplayName;
                 // 取得日更新
                 user.LastActivity = DateTime.Now;
             }
@@ -1039,20 +1078,29 @@ namespace nokako
         private string GetUserName(string publicKeyHex)
         {
             // 情報があれば表示名を取得
-            Users.TryGetValue(publicKeyHex, out User? user);
+            User? user;
+            lock (Users)
+            {
+                Users.TryGetValue(publicKeyHex, out user);
+            }
             string? userName = "???";
             if (user != null)
             {
                 userName = user.DisplayName;
                 // display_nameが無い場合はnameとする
-                if (userName == null || string.Empty == userName)
+                if (string.IsNullOrEmpty(userName))
                 {
-                    userName = $"{user.Name}";
+                    userName = user.Name;
                 }
                 // petnameがある場合はpetnameとする
                 if (!string.IsNullOrEmpty(user.PetName))
                 {
-                    userName = $"{user.PetName}";
+                    userName = user.PetName;
+                }
+                // どちらも空の場合は???とする
+                if (string.IsNullOrEmpty(userName))
+                {
+                    userName = "???";
                 }
                 // 取得日更新
                 user.LastActivity = DateTime.Now;
@@ -1070,9 +1118,9 @@ namespace nokako
         /// <returns>ミュートフラグ</returns>
         private bool IsMuted(string publicKeyHex)
         {
-            if (Users.TryGetValue(publicKeyHex, out User? user))
+            lock (Users)
             {
-                if (user != null)
+                if (Users.TryGetValue(publicKeyHex, out User? user) && user != null)
                 {
                     return user.Mute;
                 }
@@ -1292,6 +1340,10 @@ namespace nokako
         #region セル右クリック
         private void DataGridViewNotes_CellMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
+            if (e.RowIndex < 0)
+            {
+                return;
+            }
             if (e.Button == MouseButtons.Right)
             {
                 dataGridViewNotes.Rows[e.RowIndex].Selected = true;
@@ -1410,20 +1462,45 @@ namespace nokako
             _dailyTimer = new System.Threading.Timer(DailyTimerCallback, null, timeToGo, Timeout.InfiniteTimeSpan);
         }
 
-        // デイリータイマーのコールバック
-        private async void DailyTimerCallback(object? state)
+        private void InvokeOnUiThread(Action action)
         {
-            if (NostrAccess.Clients == null)
+            if (IsDisposed || !IsHandleCreated)
             {
                 return;
             }
-
             try
             {
-                labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnecting..."));
+                if (InvokeRequired)
+                {
+                    Invoke(action);
+                }
+                else
+                {
+                    action();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        // デイリータイマーのコールバック
+        private async void DailyTimerCallback(object? state)
+        {
+            try
+            {
+                if (NostrAccess.Clients == null)
+                {
+                    return;
+                }
+
+                InvokeOnUiThread(() => labelRelays.Text = "Reconnecting...");
 
                 await NostrAccess.Clients.Disconnect();
-                await NostrAccess.ConnectAsync();
+                int connectCount = await NostrAccess.ConnectAsync();
                 await NostrAccess.SubscribeAsync();
 
                 // ログイン済みの時
@@ -1431,9 +1508,18 @@ namespace nokako
                 {
                     // フォロイーを購読する
                     await NostrAccess.SubscribeFollowsAsync(_npubHex);
+
+                    var profileTargets = new[] { _npubHex, Notifier.Settings.Npub.ConvertToHex() }
+                        .Where(pk => !string.IsNullOrEmpty(pk))
+                        .Distinct()
+                        .ToArray();
+                    if (profileTargets.Length > 0)
+                    {
+                        await NostrAccess.SubscribeProfilesAsync(profileTargets);
+                    }
                 }
 
-                labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnected successfully."));
+                InvokeOnUiThread(() => labelRelays.Text = "Reconnected successfully.");
 
                 // 11:55 のときだけ投稿を実行
                 var now = DateTime.Now;
@@ -1443,35 +1529,37 @@ namespace nokako
                 }
 
                 // 投稿後に labelRelays.Text と toolTipRelays を元に戻す
-                labelRelays.Invoke((MethodInvoker)(() =>
+                InvokeOnUiThread(() =>
                 {
-                    int relayCount = NostrAccess.Relays.Length;
-
                     toolTipRelays.SetToolTip(labelRelays, string.Join("\n", NostrAccess.RelayStatusList));
 
-                    switch (relayCount)
+                    switch (connectCount)
                     {
                         case 0:
                             labelRelays.Text = "No relay enabled.";
                             break;
                         case 1:
-                            labelRelays.Text = $"{NostrAccess.Relays.Length} relay";
+                            labelRelays.Text = $"{connectCount} relay";
                             break;
                         default:
-                            labelRelays.Text = $"{NostrAccess.Relays.Length} relays";
+                            labelRelays.Text = $"{connectCount} relays";
                             break;
                     }
-                }));
+                });
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.Message);
-                labelRelays.Invoke((MethodInvoker)(() => labelRelays.Text = "Reconnection failed."));
-                MessageBox.Show($"再接続に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Debug.WriteLine($"再接続に失敗しました: {ex.Message}");
+                InvokeOnUiThread(() => labelRelays.Text = "Reconnection failed.");
             }
-
-            // タイマーを再設定して毎時実行されるようにする
-            SetDailyTimer();
+            finally
+            {
+                // タイマーを再設定して毎時実行されるようにする
+                if (!IsDisposed)
+                {
+                    SetDailyTimer();
+                }
+            }
         }
         #endregion
 
@@ -1561,76 +1649,103 @@ namespace nokako
         }
 
         #region プロフィール取得（インデクサ連携）
-        private void FetchProfileIfNeeded(string pubkey)
+        private Task FetchProfileIfNeededAsync(string pubkey)
         {
-            if (string.IsNullOrEmpty(pubkey)) return;
+            if (string.IsNullOrEmpty(pubkey)) return Task.CompletedTask;
 
-            // 既に有効な表示名がある場合は再取得不要
-            if (Users.TryGetValue(pubkey, out var existingUser) && existingUser != null)
+            var now = DateTime.UtcNow;
+            lock (_fetchingProfileTasks)
             {
-                if (!string.IsNullOrEmpty(existingUser.DisplayName) || !string.IsNullOrEmpty(existingUser.Name))
+                // 既に取得処理が進行中であればその完了を待つ
+                if (_fetchingProfileTasks.TryGetValue(pubkey, out var inFlightTask))
                 {
-                    return;
+                    return inFlightTask;
                 }
-            }
 
-            lock (_fetchingProfileHexs)
-            {
-                if (_fetchingProfileHexs.Contains(pubkey)) return;
-                _fetchingProfileHexs.Add(pubkey);
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
+                bool hasValidName = false;
+                lock (Users)
                 {
-                    var profileEvent = await NostrAccess.FetchProfileFromIndexerAsync(pubkey);
-                    if (profileEvent?.Content != null)
+                    if (Users.TryGetValue(pubkey, out var existingUser) && existingUser != null)
                     {
-                        var newUserData = Tools.JsonToUser(profileEvent.Content, profileEvent.CreatedAt, Notifier.Settings.MuteMostr);
-                        if (newUserData != null)
+                        hasValidName = !string.IsNullOrEmpty(existingUser.DisplayName) || !string.IsNullOrEmpty(existingUser.Name);
+                    }
+                }
+
+                bool isFresh = _profileLastFetchedAt.TryGetValue(pubkey, out var lastFetched)
+                    && (now - lastFetched) < ProfileRefreshInterval;
+
+                if (hasValidName && isFresh)
+                {
+                    return Task.CompletedTask;
+                }
+
+                var task = Task.Run(() => FetchProfileCoreAsync(pubkey));
+                _fetchingProfileTasks[pubkey] = task;
+                return task;
+            }
+        }
+
+        private async Task FetchProfileCoreAsync(string pubkey)
+        {
+            bool fetched = false;
+            try
+            {
+                var profileEvent = await NostrAccess.FetchProfileFromIndexerAsync(pubkey);
+                if (profileEvent?.Content != null)
+                {
+                    fetched = true;
+                    var newUserData = Tools.JsonToUser(profileEvent.Content, profileEvent.CreatedAt, Notifier.Settings.MuteMostr);
+                    if (newUserData != null)
+                    {
+                        bool updated = false;
+                        lock (Users)
                         {
-                            string resolvedName = string.Empty;
-                            lock (Users)
+                            DateTimeOffset? createdAt = DateTimeOffset.MinValue;
+                            if (Users.TryGetValue(pubkey, out User? existingUserData))
                             {
-                                DateTimeOffset? createdAt = DateTimeOffset.MinValue;
-                                if (Users.TryGetValue(pubkey, out User? existingUserData))
+                                createdAt = existingUserData?.CreatedAt;
+                                newUserData.PetName = existingUserData?.PetName;
+                                if (false == existingUserData?.Mute)
                                 {
-                                    createdAt = existingUserData?.CreatedAt;
-                                    newUserData.PetName = existingUserData?.PetName;
-                                    if (false == existingUserData?.Mute)
-                                    {
-                                        newUserData.Mute = false;
-                                    }
-                                }
-                                if (createdAt == null || (createdAt < newUserData.CreatedAt))
-                                {
-                                    newUserData.LastActivity = DateTime.Now;
-                                    Users[pubkey] = newUserData;
-                                    Debug.WriteLine($"[Indexer] プロフィール取得成功: {newUserData.DisplayName} @{newUserData.Name} ({pubkey[..8]})");
+                                    newUserData.Mute = false;
                                 }
                             }
+                            if (createdAt == null || (createdAt < newUserData.CreatedAt))
+                            {
+                                newUserData.LastActivity = DateTime.Now;
+                                Users[pubkey] = newUserData;
+                                updated = true;
+                                var shortKey = pubkey.Length >= 8 ? pubkey[..8] : pubkey;
+                                Debug.WriteLine($"[Indexer] プロフィール取得成功: {newUserData.DisplayName} @{newUserData.Name} ({shortKey})");
+                            }
+                        }
 
-                            resolvedName = GetUserName(pubkey);
-                            if (dataGridViewNotes.IsHandleCreated)
+                        if (updated)
+                        {
+                            var resolvedName = GetUserName(pubkey);
+                            if (!IsDisposed && dataGridViewNotes.IsHandleCreated)
                             {
                                 dataGridViewNotes.BeginInvoke(new Action(() => UpdateGridProfile(pubkey, resolvedName)));
                             }
                         }
                     }
                 }
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"FetchProfileIfNeededAsync エラー: {ex.Message}");
+            }
+            finally
+            {
+                lock (_fetchingProfileTasks)
                 {
-                    Debug.WriteLine($"FetchProfileIfNeeded エラー: {ex.Message}");
+                    // 取得成功時は30分キャッシュ、失敗/タイムアウト時は1分後に再試行できるよう記録
+                    _profileLastFetchedAt[pubkey] = fetched
+                        ? DateTime.UtcNow
+                        : DateTime.UtcNow - ProfileRefreshInterval + ProfileRetryCooldown;
+                    _fetchingProfileTasks.Remove(pubkey);
                 }
-                finally
-                {
-                    lock (_fetchingProfileHexs)
-                    {
-                        _fetchingProfileHexs.Remove(pubkey);
-                    }
-                }
-            });
+            }
         }
 
         private void UpdateGridProfile(string pubkey, string name)

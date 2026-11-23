@@ -20,7 +20,7 @@ Nostr の投稿やリアクションを監視し、指定したキーワード�
   - **nokakoiファミリー検知**: `client` タグに `kakoi`、`nokako`、`nokakoi`、`kako` が含まれる投稿
   - **自分宛てリアクション**: ログインユーザー宛てのリアクション（kind: 7）を検知してグリッド上にハイライト表示
 - **インデクサリレー連携**:
-  - プロフィール未取得のアカウントもインデクサリレー（`directory.yabu.me`）から非同期に自動取得し、グリッドの表示名を動的に更新
+  - プロフィール未取得または一定時間（30分）経過したアカウントはインデクサリレー（`directory.yabu.me`）から最新プロフィールを取得してから通知・表示し、`display_name` の変更にも追従
 - **ボット遠隔コマンド**:
   - 通知先（あなた）のアカウントからボット宛てに特定のキーワードを投稿することで、ボットの動作をリモート制御可能
 - **通知時アクション**:
@@ -84,8 +84,10 @@ Nostr の投稿やリアクションを監視し、指定したキーワード�
 
 ---
 
-## 利用ライブラリ
+## 利用ライブラリ / NuGet パッケージ
 
-- [NNostr](https://github.com/Kukks/NNostr) (NNostr.Client を一部変更して同梱)
-- [CredentialManagement](https://www.nuget.org/packages/CredentialManagement) (Windows 資格情報マネージャー連携)
-- [Icons8](https://icons8.com) (アイコン素材)
+- [NBitcoin.Secp256k1](https://www.nuget.org/packages/NBitcoin.Secp256k1)
+- [NNostr](https://github.com/Kukks/NNostr)（必要なクライアント機能のみ抜粋・カスタマイズして `nokako/Nostr` に統合）
+- [Icons8](https://icons8.com)（アイコン素材）
+
+※ 秘密鍵（`nsec`）は DPAPI で暗号化したうえで、Windows 標準 API（`advapi32.dll`）経由で Windows 資格情報マネージャーに保存されます。
